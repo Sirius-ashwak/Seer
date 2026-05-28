@@ -1,0 +1,82 @@
+# ───────────────────────────────────────────────────────────────────────
+# Secrets — defense in depth (contracts/.gitignore covers contracts/.env
+# specifically; this catches any .env at any other depth)
+# ───────────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.keystore
+secrets/
+private-keys/
+
+# ───────────────────────────────────────────────────────────────────────
+# Tool / IDE / editor state
+# ───────────────────────────────────────────────────────────────────────
+.claude/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ───────────────────────────────────────────────────────────────────────
+# OS junk
+# ───────────────────────────────────────────────────────────────────────
+.AppleDouble
+.LSOverride
+ehthumbs.db
+
+# ───────────────────────────────────────────────────────────────────────
+# Logs
+# ───────────────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ───────────────────────────────────────────────────────────────────────
+# Node / Next.js (for the future frontend/ dir)
+# ───────────────────────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+.vercel/
+*.tsbuildinfo
+.npm/
+.pnp.*
+.yarn/cache
+.yarn/install-state.gz
+
+# ───────────────────────────────────────────────────────────────────────
+# Foundry artifacts (root-level guard; contracts/.gitignore already
+# covers them inside contracts/)
+# ───────────────────────────────────────────────────────────────────────
+cache/
+out/
+broadcast/
+
+# ───────────────────────────────────────────────────────────────────────
+# Coverage
+# ───────────────────────────────────────────────────────────────────────
+coverage/
+lcov.info
+*.lcov
+
+# ───────────────────────────────────────────────────────────────────────
+# Python (just in case)
+# ───────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
