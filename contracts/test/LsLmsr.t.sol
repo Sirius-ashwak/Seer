@@ -112,12 +112,7 @@ contract LsLmsrTest is Test {
     }
 
     // costDelta is non-negative on any pure-buy trade.
-    function testFuzz_costDelta_buy_nonNegative(
-        uint96 qY_,
-        uint96 qN_,
-        uint96 dYes_,
-        uint96 dNo_
-    ) public pure {
+    function testFuzz_costDelta_buy_nonNegative(uint96 qY_, uint96 qN_, uint96 dYes_, uint96 dNo_) public pure {
         uint256 qY = uint256(qY_) + 1 ether;
         uint256 qN = uint256(qN_) + 1 ether;
         uint256 dYes = uint256(dYes_);

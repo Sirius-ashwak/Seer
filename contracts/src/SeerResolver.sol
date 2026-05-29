@@ -61,7 +61,12 @@ contract SeerResolver is ReentrancyGuard {
         Disputed,
         Finalized
     }
-    enum Outcome { None, Invalid, Yes, No }
+    enum Outcome {
+        None,
+        Invalid,
+        Yes,
+        No
+    }
 
     struct Resolution {
         Phase phase;
@@ -123,24 +128,16 @@ contract SeerResolver is ReentrancyGuard {
     event BondAmountChanged(uint256 previousAmount, uint256 newAmount);
     event ChallengeWindowChanged(uint256 previousWindow, uint256 newWindow);
     event EscalationParamsChanged(
-        uint256 subcommitteeSize,
-        uint256 threshold,
-        IAgentRequester.ConsensusType consensusType,
-        uint256 callTimeout
+        uint256 subcommitteeSize, uint256 threshold, IAgentRequester.ConsensusType consensusType, uint256 callTimeout
     );
     event EscalationDepositChanged(uint256 previousDeposit, uint256 newDeposit);
     event ProtocolFeeChanged(uint256 feeBps, address feeRecipient);
     event ResolutionTimeoutChanged(uint256 previousTimeout, uint256 newTimeout);
 
-    event ResolutionRequested(
-        address indexed market, uint256[SOURCES] sourceRequestIds, bytes inferencePrompt
-    );
+    event ResolutionRequested(address indexed market, uint256[SOURCES] sourceRequestIds, bytes inferencePrompt);
     event BondPosted(address indexed market, address indexed proposer, uint256 amount);
     event SourceReceived(
-        address indexed market,
-        uint8 indexed index,
-        uint256 indexed requestId,
-        IAgentRequester.ResponseStatus status
+        address indexed market, uint8 indexed index, uint256 indexed requestId, IAgentRequester.ResponseStatus status
     );
     event InferenceRequested(address indexed market, uint256 indexed llmRequestId);
     event OutcomeProposed(
@@ -150,15 +147,8 @@ contract SeerResolver is ReentrancyGuard {
         IAgentRequester.ResponseStatus status,
         uint256 challengeDeadline
     );
-    event Disputed(
-        address indexed market,
-        address indexed disputer,
-        uint256 bond,
-        uint256 indexed escalationRequestId
-    );
-    event BondSlashed(
-        address indexed loser, address indexed winner, uint256 slashed, uint256 fee
-    );
+    event Disputed(address indexed market, address indexed disputer, uint256 bond, uint256 indexed escalationRequestId);
+    event BondSlashed(address indexed loser, address indexed winner, uint256 slashed, uint256 fee);
     event OutcomeFinalized(address indexed market, Outcome outcome, bool disputed);
 
     error NotAdmin();
@@ -236,11 +226,12 @@ contract SeerResolver is ReentrancyGuard {
     // supplies the 3 source payloads (each is the JSON API Request payload for
     // one provider) plus a free-form prompt the LLM Inference agent receives
     // together with the source data.
-    function requestResolution(
-        address market,
-        bytes[] calldata sources,
-        bytes calldata inferencePrompt
-    ) external payable nonReentrant returns (uint256[SOURCES] memory requestIds) {
+    function requestResolution(address market, bytes[] calldata sources, bytes calldata inferencePrompt)
+        external
+        payable
+        nonReentrant
+        returns (uint256[SOURCES] memory requestIds)
+    {
         if (market == address(0)) revert ZeroAddress();
         if (sources.length != SOURCES) revert WrongSourceCount();
 
@@ -273,10 +264,7 @@ contract SeerResolver is ReentrancyGuard {
 
         for (uint8 i = 0; i < SOURCES; ++i) {
             uint256 reqId = requester.createRequest{value: sourceCallDeposit}(
-                jsonApiAgentId,
-                address(this),
-                this.handleSourceResponse.selector,
-                sources[i]
+                jsonApiAgentId, address(this), this.handleSourceResponse.selector, sources[i]
             );
             r.sourceRequestIds[i] = reqId;
             _sourceRefOf[reqId] = SourceRef({market: market, index: i, exists: true});
@@ -399,9 +387,7 @@ contract SeerResolver is ReentrancyGuard {
 
         if (dbond > 0) points.operatorTransfer(msg.sender, address(this), dbond);
 
-        bytes memory payload = abi.encode(
-            r.inferencePrompt, r.sourceData[0], r.sourceData[1], r.sourceData[2]
-        );
+        bytes memory payload = abi.encode(r.inferencePrompt, r.sourceData[0], r.sourceData[1], r.sourceData[2]);
         uint256 reqId = requester.createAdvancedRequest{value: escalationDeposit}(
             llmAgentId,
             address(this),
@@ -446,10 +432,7 @@ contract SeerResolver is ReentrancyGuard {
     function timeoutResolution(address market) external nonReentrant {
         Resolution storage r = _resolutions[market];
         Phase p = r.phase;
-        if (
-            p != Phase.AwaitingSources && p != Phase.AwaitingInference
-                && p != Phase.Disputed
-        ) revert NotTimeoutable();
+        if (p != Phase.AwaitingSources && p != Phase.AwaitingInference && p != Phase.Disputed) revert NotTimeoutable();
         if (block.timestamp < r.requestDeadline) revert TimeoutNotReached();
 
         r.finalOutcome = Outcome.Invalid;
@@ -470,9 +453,7 @@ contract SeerResolver is ReentrancyGuard {
 
     function _fireInference(address market) internal {
         Resolution storage r = _resolutions[market];
-        bytes memory payload = abi.encode(
-            r.inferencePrompt, r.sourceData[0], r.sourceData[1], r.sourceData[2]
-        );
+        bytes memory payload = abi.encode(r.inferencePrompt, r.sourceData[0], r.sourceData[1], r.sourceData[2]);
         uint256 reqId = requester.createRequest{value: llmCallDeposit}(
             llmAgentId, address(this), this.handleInferenceResponse.selector, payload
         );
@@ -582,20 +563,12 @@ contract SeerResolver is ReentrancyGuard {
         return _resolutions[market].sourcesReceived;
     }
 
-    function sourceRequestIdOf(address market, uint256 index)
-        external
-        view
-        returns (uint256)
-    {
+    function sourceRequestIdOf(address market, uint256 index) external view returns (uint256) {
         if (index >= SOURCES) revert IndexOutOfBounds();
         return _resolutions[market].sourceRequestIds[index];
     }
 
-    function sourceDataOf(address market, uint256 index)
-        external
-        view
-        returns (bytes memory)
-    {
+    function sourceDataOf(address market, uint256 index) external view returns (bytes memory) {
         if (index >= SOURCES) revert IndexOutOfBounds();
         return _resolutions[market].sourceData[index];
     }
@@ -638,10 +611,7 @@ contract SeerResolver is ReentrancyGuard {
         llmAgentId = id;
     }
 
-    function setDeposits(uint256 sourceCallDeposit_, uint256 llmCallDeposit_)
-        external
-        onlyAdmin
-    {
+    function setDeposits(uint256 sourceCallDeposit_, uint256 llmCallDeposit_) external onlyAdmin {
         sourceCallDeposit = sourceCallDeposit_;
         llmCallDeposit = llmCallDeposit_;
         emit DepositsChanged(sourceCallDeposit_, llmCallDeposit_);

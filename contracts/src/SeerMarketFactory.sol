@@ -85,13 +85,7 @@ contract SeerMarketFactory {
         _;
     }
 
-    constructor(
-        address points_,
-        address admin_,
-        uint256 subsidyCap_,
-        uint256 minAlphaWad_,
-        uint256 maxAlphaWad_
-    ) {
+    constructor(address points_, address admin_, uint256 subsidyCap_, uint256 minAlphaWad_, uint256 maxAlphaWad_) {
         if (points_ == address(0) || admin_ == address(0)) revert ZeroAddress();
         if (minAlphaWad_ == 0 || maxAlphaWad_ < minAlphaWad_) revert InvalidAlpha();
         points = ISeerPoints(points_);
@@ -158,9 +152,7 @@ contract SeerMarketFactory {
         subsidy = LsLmsr.cost(seedYes, seedNo, b);
         if (subsidy > subsidyCap) revert SubsidyExceedsCap();
 
-        market = address(
-            new SeerMarket(address(points), resolver, question, deadline, alphaWad, seedYes, seedNo)
-        );
+        market = address(new SeerMarket(address(points), resolver, question, deadline, alphaWad, seedYes, seedNo));
 
         points.setOperator(market, true);
         points.mint(market, subsidy);

@@ -95,9 +95,8 @@ contract SeerSettlementTest is Test {
         sources[2] = hex"03";
 
         vm.prank(proposer);
-        uint256[3] memory ids = resolver.requestResolution{value: TOTAL_DEPOSIT}(
-            address(market), sources, bytes("did it happen?")
-        );
+        uint256[3] memory ids =
+            resolver.requestResolution{value: TOTAL_DEPOSIT}(address(market), sources, bytes("did it happen?"));
 
         for (uint8 i = 0; i < 3; ++i) {
             bytes[] memory wrap = new bytes[](1);

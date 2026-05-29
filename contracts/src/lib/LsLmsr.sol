@@ -57,13 +57,11 @@ library LsLmsr {
     // many orders of magnitude smaller than the existing pool. Clamping at 0
     // is safe at this layer: the market contract enforces a minimum share-size
     // per trade, so any clamp-to-zero would already be rejected upstream.
-    function costDelta(
-        uint256 qYes,
-        uint256 qNo,
-        uint256 dYes,
-        uint256 dNo,
-        uint256 alphaWad
-    ) internal pure returns (uint256) {
+    function costDelta(uint256 qYes, uint256 qNo, uint256 dYes, uint256 dNo, uint256 alphaWad)
+        internal
+        pure
+        returns (uint256)
+    {
         uint256 bOld = liquidity(qYes, qNo, alphaWad);
         uint256 qYesNew = qYes + dYes;
         uint256 qNoNew = qNo + dNo;

@@ -22,12 +22,11 @@ contract MockAgentRequester is IAgentRequester {
     event RequestCreated(uint256 indexed requestId, uint256 agentId, address callback);
     event CallbackSimulated(uint256 indexed requestId, ResponseStatus status, uint256 responseCount);
 
-    function createRequest(
-        uint256 agentId,
-        address callbackAddress,
-        bytes4 callbackSelector,
-        bytes calldata payload
-    ) external payable returns (uint256 requestId) {
+    function createRequest(uint256 agentId, address callbackAddress, bytes4 callbackSelector, bytes calldata payload)
+        external
+        payable
+        returns (uint256 requestId)
+    {
         requestId = ++nextRequestId;
         requests[requestId] = PendingRequest({
             agentId: agentId,
@@ -75,9 +74,8 @@ contract MockAgentRequester is IAgentRequester {
             payload: pr.payload
         });
 
-        (bool ok, bytes memory ret) = pr.callbackAddress.call(
-            abi.encodeWithSelector(pr.callbackSelector, requestId, responses, status, details)
-        );
+        (bool ok, bytes memory ret) =
+            pr.callbackAddress.call(abi.encodeWithSelector(pr.callbackSelector, requestId, responses, status, details));
         if (!ok) {
             // Bubble the revert reason up so tests see the underlying error.
             assembly {

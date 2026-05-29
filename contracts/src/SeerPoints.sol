@@ -42,7 +42,9 @@ contract SeerPoints {
     function mint(address to, uint256 amount) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
         totalSupply += amount;
-        unchecked { balanceOf[to] += amount; }
+        unchecked {
+            balanceOf[to] += amount;
+        }
         emit Transfer(address(0), to, amount);
     }
 

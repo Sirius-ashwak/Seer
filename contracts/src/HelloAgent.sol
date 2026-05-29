@@ -24,12 +24,8 @@ contract HelloAgent {
     }
 
     function ask(uint256 agentId, bytes calldata payload) external payable returns (uint256 requestId) {
-        requestId = requester.createRequest{value: msg.value}(
-            agentId,
-            address(this),
-            this.handleResponse.selector,
-            payload
-        );
+        requestId =
+            requester.createRequest{value: msg.value}(agentId, address(this), this.handleResponse.selector, payload);
         lastRequestId = requestId;
         emit RequestSent(requestId, agentId, payload);
     }

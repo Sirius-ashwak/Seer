@@ -10,9 +10,9 @@ import {SeerPoints} from "../src/SeerPoints.sol";
 
 contract SeerMarketFactoryTest is Test {
     uint256 internal constant WAD = 1e18;
-    uint256 internal constant ALPHA = 5e16;        // 0.05
-    uint256 internal constant MIN_ALPHA = 1e15;    // 0.001
-    uint256 internal constant MAX_ALPHA = 5e17;    // 0.5
+    uint256 internal constant ALPHA = 5e16; // 0.05
+    uint256 internal constant MIN_ALPHA = 1e15; // 0.001
+    uint256 internal constant MAX_ALPHA = 5e17; // 0.5
     uint256 internal constant SEED = 1_000 ether;
     uint256 internal constant SUBSIDY_CAP = 100_000 ether;
 
@@ -26,9 +26,7 @@ contract SeerMarketFactoryTest is Test {
 
     function setUp() public {
         points = new SeerPoints(deployer);
-        factory = new SeerMarketFactory(
-            address(points), admin, SUBSIDY_CAP, MIN_ALPHA, MAX_ALPHA
-        );
+        factory = new SeerMarketFactory(address(points), admin, SUBSIDY_CAP, MIN_ALPHA, MAX_ALPHA);
         // Two-step ownership: hand SeerPoints over to the factory.
         points.transferOwnership(address(factory));
         factory.acceptPointsOwnership();
@@ -36,9 +34,7 @@ contract SeerMarketFactoryTest is Test {
     }
 
     function _create(uint256 deadline) internal returns (address market, uint256 subsidy) {
-        return factory.createMarket(
-            "Will it rain tomorrow?", deadline, ALPHA, SEED, SEED, resolver
-        );
+        return factory.createMarket("Will it rain tomorrow?", deadline, ALPHA, SEED, SEED, resolver);
     }
 
     // ─── Happy path ──────────────────────────────────────────────────────────
@@ -113,9 +109,7 @@ contract SeerMarketFactoryTest is Test {
         // Use a giant seed that pushes computed subsidy above the cap.
         uint256 hugeSeed = 1_000_000_000 ether;
         vm.expectRevert(SeerMarketFactory.SubsidyExceedsCap.selector);
-        factory.createMarket(
-            "q", block.timestamp + 1 days, ALPHA, hugeSeed, hugeSeed, resolver
-        );
+        factory.createMarket("q", block.timestamp + 1 days, ALPHA, hugeSeed, hugeSeed, resolver);
     }
 
     // ─── Admin ───────────────────────────────────────────────────────────────

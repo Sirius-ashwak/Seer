@@ -102,11 +102,7 @@ contract SeerMarket is ReentrancyGuard {
 
     // ─── Trading ─────────────────────────────────────────────────────────────
 
-    function buy(Side side, uint256 shares, uint256 maxCost)
-        external
-        nonReentrant
-        returns (uint256 cost)
-    {
+    function buy(Side side, uint256 shares, uint256 maxCost) external nonReentrant returns (uint256 cost) {
         if (shares == 0) revert ZeroShares();
         if (block.timestamp >= deadline || outcome != Outcome.Pending) revert TradingClosed();
 
@@ -124,11 +120,7 @@ contract SeerMarket is ReentrancyGuard {
         emit Bought(msg.sender, side, shares, cost);
     }
 
-    function sell(Side side, uint256 shares, uint256 minPayout)
-        external
-        nonReentrant
-        returns (uint256 payout)
-    {
+    function sell(Side side, uint256 shares, uint256 minPayout) external nonReentrant returns (uint256 payout) {
         if (shares == 0) revert ZeroShares();
         if (block.timestamp >= deadline || outcome != Outcome.Pending) revert TradingClosed();
 

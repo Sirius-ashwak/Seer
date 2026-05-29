@@ -59,18 +59,10 @@ contract SeerResolverTest is Test {
     function _sources() internal pure returns (bytes[] memory s) {
         s = new bytes[](3);
         s[0] = abi.encode(
-            "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd",
-            "bitcoin.usd",
-            uint8(8)
+            "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd", "bitcoin.usd", uint8(8)
         );
-        s[1] = abi.encode(
-            "https://api.coinbase.com/v2/prices/BTC-USD/spot", "data.amount", uint8(8)
-        );
-        s[2] = abi.encode(
-            "https://api.kraken.com/0/public/Ticker?pair=XBTUSD",
-            "result.XXBTZUSD.c[0]",
-            uint8(8)
-        );
+        s[1] = abi.encode("https://api.coinbase.com/v2/prices/BTC-USD/spot", "data.amount", uint8(8));
+        s[2] = abi.encode("https://api.kraken.com/0/public/Ticker?pair=XBTUSD", "result.XXBTZUSD.c[0]", uint8(8));
     }
 
     function _prompt() internal pure returns (bytes memory) {
@@ -90,15 +82,11 @@ contract SeerResolverTest is Test {
         for (uint8 i = 0; i < 3; ++i) {
             bytes[] memory wrap = new bytes[](1);
             wrap[0] = datas[i];
-            mockRequester.simulateCallback(
-                ids[i], wrap, IAgentRequester.ResponseStatus.Succeeded
-            );
+            mockRequester.simulateCallback(ids[i], wrap, IAgentRequester.ResponseStatus.Succeeded);
         }
     }
 
-    function _deliverInference(uint8 verdict, IAgentRequester.ResponseStatus status)
-        internal
-    {
+    function _deliverInference(uint8 verdict, IAgentRequester.ResponseStatus status) internal {
         uint256 llmId = resolver.llmRequestIdOf(market);
         bytes[] memory wrap = new bytes[](1);
         wrap[0] = abi.encode(verdict);
@@ -121,9 +109,7 @@ contract SeerResolverTest is Test {
         resolver.dispute{value: ESCALATION_DEPOSIT}(market);
     }
 
-    function _deliverEscalation(uint8 verdict, IAgentRequester.ResponseStatus status)
-        internal
-    {
+    function _deliverEscalation(uint8 verdict, IAgentRequester.ResponseStatus status) internal {
         uint256 escId = resolver.escalationRequestIdOf(market);
         bytes[] memory wrap = new bytes[](1);
         wrap[0] = abi.encode(verdict);
@@ -274,9 +260,7 @@ contract SeerResolverTest is Test {
     function test_requestResolution_rejectsWrongDeposit() public {
         uint256 wrong = TOTAL_DEPOSIT - 1;
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(SeerResolver.WrongDeposit.selector, wrong, TOTAL_DEPOSIT)
-        );
+        vm.expectRevert(abi.encodeWithSelector(SeerResolver.WrongDeposit.selector, wrong, TOTAL_DEPOSIT));
         resolver.requestResolution{value: wrong}(market, _sources(), _prompt());
     }
 
@@ -317,9 +301,7 @@ contract SeerResolverTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(SeerResolver.NotRequester.selector);
-        resolver.handleSourceResponse(
-            ids[0], empty, IAgentRequester.ResponseStatus.Succeeded, details
-        );
+        resolver.handleSourceResponse(ids[0], empty, IAgentRequester.ResponseStatus.Succeeded, details);
     }
 
     function test_handleSourceResponse_revertsOnUnknownRequest() public {
@@ -328,9 +310,7 @@ contract SeerResolverTest is Test {
 
         vm.prank(address(mockRequester));
         vm.expectRevert(SeerResolver.UnknownRequest.selector);
-        resolver.handleSourceResponse(
-            12345, empty, IAgentRequester.ResponseStatus.Succeeded, details
-        );
+        resolver.handleSourceResponse(12345, empty, IAgentRequester.ResponseStatus.Succeeded, details);
     }
 
     function test_handleSourceResponse_storesDataAndIncrementsCount() public {
@@ -338,9 +318,7 @@ contract SeerResolverTest is Test {
 
         bytes[] memory wrap = new bytes[](1);
         wrap[0] = hex"deadbeef";
-        mockRequester.simulateCallback(
-            ids[1], wrap, IAgentRequester.ResponseStatus.Succeeded
-        );
+        mockRequester.simulateCallback(ids[1], wrap, IAgentRequester.ResponseStatus.Succeeded);
 
         assertEq(resolver.sourcesReceivedOf(market), 1);
         assertEq(resolver.sourceDataOf(market, 1), hex"deadbeef");
@@ -372,9 +350,7 @@ contract SeerResolverTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(SeerResolver.NotRequester.selector);
-        resolver.handleInferenceResponse(
-            llmId, empty, IAgentRequester.ResponseStatus.Succeeded, details
-        );
+        resolver.handleInferenceResponse(llmId, empty, IAgentRequester.ResponseStatus.Succeeded, details);
     }
 
     function test_inference_opensChallengeWindowWithoutPayout() public {
@@ -478,8 +454,7 @@ contract SeerResolverTest is Test {
 
         uint256 firstId = resolver.sourceRequestIdOf(market, 0);
         vm.prank(alice);
-        uint256[3] memory secondIds =
-            resolver.requestResolution{value: TOTAL_DEPOSIT}(market, _sources(), _prompt());
+        uint256[3] memory secondIds = resolver.requestResolution{value: TOTAL_DEPOSIT}(market, _sources(), _prompt());
 
         for (uint8 i = 0; i < 3; ++i) {
             assertGt(secondIds[i], firstId);
@@ -501,9 +476,7 @@ contract SeerResolverTest is Test {
         bytes[] memory wrap = new bytes[](1);
         wrap[0] = hex"99";
         vm.expectRevert(SeerResolver.UnknownRequest.selector);
-        mockRequester.simulateCallback(
-            ids[0], wrap, IAgentRequester.ResponseStatus.Succeeded
-        );
+        mockRequester.simulateCallback(ids[0], wrap, IAgentRequester.ResponseStatus.Succeeded);
     }
 
     function test_views_indexOutOfBoundsReverts() public {
@@ -533,10 +506,7 @@ contract SeerResolverTest is Test {
         // Escalation deposit forwarded to the requester for the advanced request.
         assertEq(address(mockRequester).balance, mockBalBefore + ESCALATION_DEPOSIT);
         // Deadline reset for the escalation leg; outcome still unsettled.
-        assertEq(
-            resolver.requestDeadlineOf(market),
-            block.timestamp + resolver.resolutionTimeout()
-        );
+        assertEq(resolver.requestDeadlineOf(market), block.timestamp + resolver.resolutionTimeout());
         assertEq(uint8(resolver.outcomeOf(market)), uint8(SeerResolver.Outcome.None));
     }
 
@@ -559,9 +529,7 @@ contract SeerResolverTest is Test {
         _toChallenge(1);
         uint256 wrong = ESCALATION_DEPOSIT - 1;
         vm.prank(bob);
-        vm.expectRevert(
-            abi.encodeWithSelector(SeerResolver.WrongDeposit.selector, wrong, ESCALATION_DEPOSIT)
-        );
+        vm.expectRevert(abi.encodeWithSelector(SeerResolver.WrongDeposit.selector, wrong, ESCALATION_DEPOSIT));
         resolver.dispute{value: wrong}(market);
     }
 
@@ -647,9 +615,7 @@ contract SeerResolverTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(SeerResolver.NotRequester.selector);
-        resolver.handleEscalationResponse(
-            escId, empty, IAgentRequester.ResponseStatus.Succeeded, details
-        );
+        resolver.handleEscalationResponse(escId, empty, IAgentRequester.ResponseStatus.Succeeded, details);
     }
 
     function test_handleEscalationResponse_revertsOnUnknownRequest() public {
@@ -658,9 +624,7 @@ contract SeerResolverTest is Test {
 
         vm.prank(address(mockRequester));
         vm.expectRevert(SeerResolver.UnknownRequest.selector);
-        resolver.handleEscalationResponse(
-            99999, empty, IAgentRequester.ResponseStatus.Succeeded, details
-        );
+        resolver.handleEscalationResponse(99999, empty, IAgentRequester.ResponseStatus.Succeeded, details);
     }
 
     // ─── timeout safety net (Task L) ────────────────────────────────────────────
@@ -744,10 +708,7 @@ contract SeerResolverTest is Test {
         );
         assertEq(fresh.escalationSubcommitteeSize(), 7);
         assertEq(fresh.escalationThreshold(), 5);
-        assertEq(
-            uint8(fresh.escalationConsensusType()),
-            uint8(IAgentRequester.ConsensusType.Threshold)
-        );
+        assertEq(uint8(fresh.escalationConsensusType()), uint8(IAgentRequester.ConsensusType.Threshold));
         assertEq(fresh.escalationCallTimeout(), 1 hours);
         assertEq(fresh.resolutionTimeout(), 1 days);
         assertEq(fresh.feeRecipient(), admin);
@@ -764,10 +725,7 @@ contract SeerResolverTest is Test {
         resolver.setEscalationParams(9, 6, IAgentRequester.ConsensusType.Unanimous, 2 hours);
         assertEq(resolver.escalationSubcommitteeSize(), 9);
         assertEq(resolver.escalationThreshold(), 6);
-        assertEq(
-            uint8(resolver.escalationConsensusType()),
-            uint8(IAgentRequester.ConsensusType.Unanimous)
-        );
+        assertEq(uint8(resolver.escalationConsensusType()), uint8(IAgentRequester.ConsensusType.Unanimous));
         assertEq(resolver.escalationCallTimeout(), 2 hours);
     }
 
