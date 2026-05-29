@@ -65,7 +65,8 @@ contract SeerSettlementTest is Test {
             block.timestamp + 7 days,
             ALPHA,
             SEED,
-            SEED
+            SEED,
+            0 // MEV guard disabled for these unit tests
         );
 
         // Operators: resolver escrows bonds, market escrows collateral.

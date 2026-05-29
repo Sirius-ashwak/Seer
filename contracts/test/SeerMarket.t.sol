@@ -32,7 +32,8 @@ contract SeerMarketTest is Test {
             block.timestamp + DEADLINE_DELAY,
             ALPHA,
             SEED,
-            SEED
+            SEED,
+            0 // MEV guard disabled for these unit tests
         );
 
         vm.startPrank(owner);

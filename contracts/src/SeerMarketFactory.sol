@@ -45,6 +45,11 @@ contract SeerMarketFactory {
         bytes inferencePrompt;
     }
 
+    // Markets the factory deploys arm the MEV guard at this threshold: a trade
+    // >= 50% of the pool must use the commit/reveal path (Task T). Directly
+    // constructed markets (tests, bespoke deployments) can pass 0 to disable it.
+    uint256 internal constant MARKET_LARGE_BET_BPS = 5_000;
+
     ISeerPoints public immutable points;
     address public admin;
     address public reactor;
@@ -152,7 +157,9 @@ contract SeerMarketFactory {
         subsidy = LsLmsr.cost(seedYes, seedNo, b);
         if (subsidy > subsidyCap) revert SubsidyExceedsCap();
 
-        market = address(new SeerMarket(address(points), resolver, question, deadline, alphaWad, seedYes, seedNo));
+        market = address(
+            new SeerMarket(address(points), resolver, question, deadline, alphaWad, seedYes, seedNo, MARKET_LARGE_BET_BPS)
+        );
 
         points.setOperator(market, true);
         points.mint(market, subsidy);

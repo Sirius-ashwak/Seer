@@ -41,6 +41,21 @@ contract SeerMarket is ReentrancyGuard {
     uint256 public immutable deadline;
     uint256 public immutable alphaWad;
 
+    // MEV guard (Task T). A trade whose size is >= largeBetBps of the current
+    // pool (qYes + qNo) cannot be executed atomically: it must be committed in
+    // one block and revealed in a later one. This defeats sandwich attacks,
+    // which depend on wrapping the victim's trade inside a single block. A value
+    // of 0 disables the guard entirely (used by direct/test deployments).
+    uint256 public immutable largeBetBps;
+    uint256 internal constant BPS_DENOMINATOR = 10_000;
+
+    struct Commitment {
+        bytes32 hash;
+        uint256 blockNumber;
+    }
+
+    mapping(address => Commitment) public commitmentOf;
+
     uint256 public qYes;
     uint256 public qNo;
     Outcome public outcome;
@@ -59,6 +74,7 @@ contract SeerMarket is ReentrancyGuard {
 
     event Bought(address indexed trader, Side side, uint256 shares, uint256 cost);
     event Sold(address indexed trader, Side side, uint256 shares, uint256 payout);
+    event TradeCommitted(address indexed trader, bytes32 commitment);
     event Resolved(Outcome outcome);
     event Claimed(address indexed trader, uint256 amount);
     event AutoResolutionConfigured(address indexed oracle);
@@ -69,6 +85,10 @@ contract SeerMarket is ReentrancyGuard {
     error SlippageTooLow();
     error InsufficientShares();
     error ZeroShares();
+    error CommitRequired();
+    error NoCommitment();
+    error RevealTooEarly();
+    error CommitmentMismatch();
     error NotResolver();
     error AlreadyResolved();
     error NotResolved();
@@ -88,7 +108,8 @@ contract SeerMarket is ReentrancyGuard {
         uint256 deadline_,
         uint256 alphaWad_,
         uint256 seedYes_,
-        uint256 seedNo_
+        uint256 seedNo_,
+        uint256 largeBetBps_
     ) {
         points = ISeerPoints(points_);
         resolver = resolver_;
@@ -97,12 +118,26 @@ contract SeerMarket is ReentrancyGuard {
         alphaWad = alphaWad_;
         qYes = seedYes_;
         qNo = seedNo_;
+        largeBetBps = largeBetBps_;
         factory = msg.sender;
     }
 
     // ─── Trading ─────────────────────────────────────────────────────────────
 
+    // Small trades execute atomically. A trade at or above the large-bet
+    // threshold must come through the commit/reveal path so it cannot be
+    // sandwiched within a single block.
     function buy(Side side, uint256 shares, uint256 maxCost) external nonReentrant returns (uint256 cost) {
+        if (_isLargeBet(shares)) revert CommitRequired();
+        return _buy(side, shares, maxCost);
+    }
+
+    function sell(Side side, uint256 shares, uint256 minPayout) external nonReentrant returns (uint256 payout) {
+        if (_isLargeBet(shares)) revert CommitRequired();
+        return _sell(side, shares, minPayout);
+    }
+
+    function _buy(Side side, uint256 shares, uint256 maxCost) internal returns (uint256 cost) {
         if (shares == 0) revert ZeroShares();
         if (block.timestamp >= deadline || outcome != Outcome.Pending) revert TradingClosed();
 
@@ -120,7 +155,7 @@ contract SeerMarket is ReentrancyGuard {
         emit Bought(msg.sender, side, shares, cost);
     }
 
-    function sell(Side side, uint256 shares, uint256 minPayout) external nonReentrant returns (uint256 payout) {
+    function _sell(Side side, uint256 shares, uint256 minPayout) internal returns (uint256 payout) {
         if (shares == 0) revert ZeroShares();
         if (block.timestamp >= deadline || outcome != Outcome.Pending) revert TradingClosed();
 
@@ -151,6 +186,51 @@ contract SeerMarket is ReentrancyGuard {
 
         points.operatorTransfer(address(this), msg.sender, payout);
         emit Sold(msg.sender, side, shares, payout);
+    }
+
+    // ─── MEV guard: commit-reveal (Task T) ─────────────────────────────────────
+
+    // Step 1: in block N, post the hash of an intended trade. The parameters
+    // (side, size, slippage limit) stay hidden until reveal, so a searcher
+    // watching the mempool learns nothing to front-run, and cannot place the
+    // back-running leg in the same block because reveal is barred until N+1.
+    function commitTrade(bytes32 commitment) external {
+        commitmentOf[msg.sender] = Commitment({hash: commitment, blockNumber: block.number});
+        emit TradeCommitted(msg.sender, commitment);
+    }
+
+    // Step 2 (block > N): reveal the parameters and execute. Slippage limits are
+    // still enforced here, so an adverse price move between commit and reveal
+    // simply makes the trade revert rather than fill at a bad price.
+    function revealBuy(Side side, uint256 shares, uint256 maxCost, bytes32 salt)
+        external
+        nonReentrant
+        returns (uint256 cost)
+    {
+        _consume(commitmentHash(true, side, shares, maxCost, salt));
+        return _buy(side, shares, maxCost);
+    }
+
+    function revealSell(Side side, uint256 shares, uint256 minPayout, bytes32 salt)
+        external
+        nonReentrant
+        returns (uint256 payout)
+    {
+        _consume(commitmentHash(false, side, shares, minPayout, salt));
+        return _sell(side, shares, minPayout);
+    }
+
+    function _consume(bytes32 expected) internal {
+        Commitment memory c = commitmentOf[msg.sender];
+        if (c.hash == bytes32(0)) revert NoCommitment();
+        if (block.number <= c.blockNumber) revert RevealTooEarly();
+        if (c.hash != expected) revert CommitmentMismatch();
+        delete commitmentOf[msg.sender];
+    }
+
+    function _isLargeBet(uint256 shares) internal view returns (bool) {
+        if (largeBetBps == 0) return false;
+        return shares * BPS_DENOMINATOR >= (qYes + qNo) * largeBetBps;
     }
 
     // ─── Resolution ──────────────────────────────────────────────────────────
@@ -233,6 +313,20 @@ contract SeerMarket is ReentrancyGuard {
     }
 
     // ─── Views ───────────────────────────────────────────────────────────────
+
+    // Canonical commitment preimage. Off-chain, a trader picks a random salt and
+    // hashes their intended trade with this before calling commitTrade.
+    function commitmentHash(bool isBuy, Side side, uint256 shares, uint256 limit, bytes32 salt)
+        public
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(isBuy, side, shares, limit, salt));
+    }
+
+    function isLargeBet(uint256 shares) external view returns (bool) {
+        return _isLargeBet(shares);
+    }
 
     function priceYes() external view returns (uint256) {
         return LsLmsr.priceYes(qYes, qNo, LsLmsr.liquidity(qYes, qNo, alphaWad));
