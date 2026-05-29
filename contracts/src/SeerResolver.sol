@@ -47,7 +47,14 @@ import {ISeerPoints} from "./interfaces/ISeerPoints.sol";
 //
 // Safety net (Task L): timeoutResolution() forces INVALID + refunds every bond
 // if the agent flow or an escalation stalls past resolutionTimeout — no path
-// locks funds. Source-diversity / sanitization remain Tasks M / N on top.
+// locks funds.
+//
+// Source hardening (Tasks M + N): returned source data is always run through an
+// HTML sanitizer before it reaches the LLM, so hidden markup (comments,
+// script/style blocks, tags) can't smuggle prompt-injection instructions into
+// the verdict. An optional, admin-managed source registry (default off) further
+// restricts resolution to pre-approved source payloads and, when diversity
+// enforcement is on, rejects three sources that share a provider/CDN.
 contract SeerResolver is ReentrancyGuard {
     uint256 public constant SOURCES = 3;
     uint256 public constant MAX_FEE_BPS = 2_000; // 20% cap on the protocol fee
@@ -116,6 +123,13 @@ contract SeerResolver is ReentrancyGuard {
     address public feeRecipient;
     uint256 public resolutionTimeout;
 
+    // Source hardening (Tasks M + N). Enforcement defaults off so direct /
+    // scripted resolutions keep working; flip on once the registry is populated.
+    bool public enforceSourceRegistry; // each source payload must be approved
+    bool public enforceSourceDiversity; // the 3 sources must be distinct providers
+    mapping(bytes32 => bool) public approvedSource; // keccak256(payload) -> approved
+    mapping(bytes32 => bytes32) public sourceProvider; // keccak256(payload) -> provider/CDN tag
+
     mapping(address => Resolution) private _resolutions;
     mapping(uint256 => SourceRef) private _sourceRefOf;
     mapping(uint256 => address) private _inferenceMarketOf;
@@ -133,6 +147,9 @@ contract SeerResolver is ReentrancyGuard {
     event EscalationDepositChanged(uint256 previousDeposit, uint256 newDeposit);
     event ProtocolFeeChanged(uint256 feeBps, address feeRecipient);
     event ResolutionTimeoutChanged(uint256 previousTimeout, uint256 newTimeout);
+    event SourceRegistered(bytes32 indexed sourceKey, bytes32 indexed provider);
+    event SourceDeregistered(bytes32 indexed sourceKey);
+    event SourceEnforcementChanged(bool registry, bool diversity);
 
     event ResolutionRequested(address indexed market, uint256[SOURCES] sourceRequestIds, bytes inferencePrompt);
     event BondPosted(address indexed market, address indexed proposer, uint256 amount);
@@ -166,6 +183,8 @@ contract SeerResolver is ReentrancyGuard {
     error NotTimeoutable();
     error TimeoutNotReached();
     error FeeTooHigh();
+    error SourceNotApproved(bytes32 sourceKey);
+    error SourcesNotDiverse();
 
     modifier onlyAdmin() {
         if (msg.sender != admin) revert NotAdmin();
@@ -238,6 +257,8 @@ contract SeerResolver is ReentrancyGuard {
         uint256 expected = SOURCES * sourceCallDeposit + llmCallDeposit;
         if (msg.value != expected) revert WrongDeposit(msg.value, expected);
 
+        _validateSources(sources);
+
         Resolution storage r = _resolutions[market];
         if (r.phase != Phase.None && r.phase != Phase.Finalized) revert AlreadyInProgress();
 
@@ -290,8 +311,10 @@ contract SeerResolver is ReentrancyGuard {
         Resolution storage r = _resolutions[ref.market];
         if (r.phase != Phase.AwaitingSources) revert UnknownRequest();
 
+        // Sanitize before storing: the LLM only ever sees markup-stripped text,
+        // so a source page's hidden HTML can't inject instructions (Task M).
         bytes memory data;
-        if (responses.length > 0) data = responses[0].data;
+        if (responses.length > 0) data = _sanitizeHtml(responses[0].data);
         r.sourceData[ref.index] = data;
         r.sourcesReceived += 1;
 
@@ -508,6 +531,108 @@ contract SeerResolver is ReentrancyGuard {
         revert InvalidVerdict(v);
     }
 
+    // ─── Source hardening (Tasks M + N) ─────────────────────────────────────────
+
+    // Enforce the source registry / diversity policy at request time. Both
+    // checks are opt-in (default off); when neither is on this is a no-op so
+    // direct and reactive resolutions are unaffected.
+    function _validateSources(bytes[] calldata sources) internal view {
+        bool registry = enforceSourceRegistry;
+        bool diversity = enforceSourceDiversity;
+        if (!registry && !diversity) return;
+
+        bytes32[SOURCES] memory providers;
+        for (uint8 i = 0; i < SOURCES; ++i) {
+            bytes32 key = keccak256(sources[i]);
+            if (registry && !approvedSource[key]) revert SourceNotApproved(key);
+            providers[i] = sourceProvider[key];
+        }
+
+        // Reject correlated providers: the three sources must be distinct. An
+        // unregistered source carries the zero tag, so three unknown providers
+        // collide and are rejected too.
+        if (diversity) {
+            if (providers[0] == providers[1] || providers[0] == providers[2] || providers[1] == providers[2]) {
+                revert SourcesNotDiverse();
+            }
+        }
+    }
+
+    // Strip HTML so hidden markup can't smuggle instructions into the LLM:
+    // comment blocks and <script>/<style> blocks are removed wholesale
+    // (delimiters and content), and every other tag's angle-bracket span is
+    // dropped. What survives is the visible text the LLM should reason over.
+    function _sanitizeHtml(bytes memory input) internal pure returns (bytes memory) {
+        uint256 n = input.length;
+        bytes memory out = new bytes(n);
+        uint256 j = 0;
+        uint256 i = 0;
+        while (i < n) {
+            if (input[i] == "<") {
+                // HTML comment: <!-- ... -->
+                if (i + 3 < n && input[i + 1] == "!" && input[i + 2] == "-" && input[i + 3] == "-") {
+                    i += 4;
+                    while (i + 2 < n && !(input[i] == "-" && input[i + 1] == "-" && input[i + 2] == ">")) {
+                        i += 1;
+                    }
+                    i += 3; // consume "-->" (or run past the end)
+                    continue;
+                }
+                // <script ...>...</script> or <style ...>...</style>: drop content too.
+                uint256 kw = _blockKeyword(input, i + 1);
+                if (kw != 0) {
+                    while (i < n && input[i] != ">") {
+                        i += 1;
+                    }
+                    i += 1; // consume the opening tag's ">"
+                    while (i < n) {
+                        if (input[i] == "<" && i + 1 < n && input[i + 1] == "/" && _blockKeyword(input, i + 2) == kw) {
+                            while (i < n && input[i] != ">") {
+                                i += 1;
+                            }
+                            i += 1; // consume the closing tag's ">"
+                            break;
+                        }
+                        i += 1;
+                    }
+                    continue;
+                }
+                // Generic tag: drop up to and including ">".
+                while (i < n && input[i] != ">") {
+                    i += 1;
+                }
+                i += 1;
+                continue;
+            }
+            out[j] = input[i];
+            j += 1;
+            i += 1;
+        }
+        assembly {
+            mstore(out, j) // shrink to the bytes actually written
+        }
+        return out;
+    }
+
+    // Returns 1 for "script", 2 for "style", 0 otherwise (case-insensitive),
+    // matching at position `pos` in `input`.
+    function _blockKeyword(bytes memory input, uint256 pos) internal pure returns (uint256) {
+        if (_ciMatch(input, pos, "script")) return 1;
+        if (_ciMatch(input, pos, "style")) return 2;
+        return 0;
+    }
+
+    function _ciMatch(bytes memory input, uint256 pos, bytes memory kw) internal pure returns (bool) {
+        uint256 len = kw.length;
+        if (pos + len > input.length) return false;
+        for (uint256 k = 0; k < len; ++k) {
+            bytes1 c = input[pos + k];
+            if (c >= 0x41 && c <= 0x5A) c = bytes1(uint8(c) + 32); // to lowercase
+            if (c != kw[k]) return false;
+        }
+        return true;
+    }
+
     // ─── Views ──────────────────────────────────────────────────────────────
 
     function phaseOf(address market) external view returns (Phase) {
@@ -593,6 +718,17 @@ contract SeerResolver is ReentrancyGuard {
         return _resolutions[market].finalizedAt;
     }
 
+    // Markup-stripped view of `input` — the transform applied to every source
+    // response before it reaches the LLM (Task M). Exposed for transparency /
+    // off-chain previews.
+    function sanitizeHtml(bytes calldata input) external pure returns (bytes memory) {
+        return _sanitizeHtml(input);
+    }
+
+    function sourceKeyOf(bytes calldata payload) external pure returns (bytes32) {
+        return keccak256(payload);
+    }
+
     // ─── Admin ──────────────────────────────────────────────────────────────
 
     function setAdmin(address newAdmin) external onlyAdmin {
@@ -656,5 +792,30 @@ contract SeerResolver is ReentrancyGuard {
     function setResolutionTimeout(uint256 newTimeout) external onlyAdmin {
         emit ResolutionTimeoutChanged(resolutionTimeout, newTimeout);
         resolutionTimeout = newTimeout;
+    }
+
+    // ─── Source registry admin (Tasks M + N) ────────────────────────────────────
+
+    // Approve a source payload and tag it with the provider/CDN it queries.
+    // Sources sharing a `provider` are treated as correlated by the diversity
+    // check; pass distinct tags for independent providers.
+    function registerSource(bytes calldata payload, bytes32 provider) external onlyAdmin {
+        bytes32 key = keccak256(payload);
+        approvedSource[key] = true;
+        sourceProvider[key] = provider;
+        emit SourceRegistered(key, provider);
+    }
+
+    function deregisterSource(bytes calldata payload) external onlyAdmin {
+        bytes32 key = keccak256(payload);
+        delete approvedSource[key];
+        delete sourceProvider[key];
+        emit SourceDeregistered(key);
+    }
+
+    function setSourceEnforcement(bool registry, bool diversity) external onlyAdmin {
+        enforceSourceRegistry = registry;
+        enforceSourceDiversity = diversity;
+        emit SourceEnforcementChanged(registry, diversity);
     }
 }
