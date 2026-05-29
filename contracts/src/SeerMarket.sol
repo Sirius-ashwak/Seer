@@ -5,6 +5,7 @@ import {ReentrancyGuard} from "solady/utils/ReentrancyGuard.sol";
 
 import {LsLmsr} from "./lib/LsLmsr.sol";
 import {ISeerPoints} from "./interfaces/ISeerPoints.sol";
+import {ISeerResolver} from "./interfaces/ISeerResolver.sol";
 
 // One LS-LMSR binary prediction market. Holds qYes/qNo on the curve, tracks
 // per-trader share balances internally (no transferable share tokens in v1),
@@ -13,9 +14,25 @@ import {ISeerPoints} from "./interfaces/ISeerPoints.sol";
 // Lifecycle: Open (trading) → Resolved/Invalid (claims). The configured
 // resolver address — Settlement contract in production, EOA in tests —
 // is the only address allowed to call resolve().
+//
+// Auto-resolution (Tasks Q + R): when the factory deploys a market in response
+// to a reactive ContractEvent, it configures the market with the oracle, the
+// three source payloads, and the inference prompt, and pre-funds it with the
+// oracle's bond. A Schedule subscription (or any cranker) then calls
+// triggerResolution() at the deadline; the market becomes its own proposer,
+// forwarding the bond and agent deposits to the oracle. No off-chain call is
+// needed to start resolution.
 contract SeerMarket is ReentrancyGuard {
-    enum Side { Yes, No }
-    enum Outcome { Pending, Yes, No, Invalid }
+    enum Side {
+        Yes,
+        No
+    }
+    enum Outcome {
+        Pending,
+        Yes,
+        No,
+        Invalid
+    }
 
     ISeerPoints public immutable points;
     address public immutable resolver;
@@ -28,6 +45,13 @@ contract SeerMarket is ReentrancyGuard {
     uint256 public qNo;
     Outcome public outcome;
 
+    // Auto-resolution wiring (set once by the factory at deploy).
+    address public oracle;
+    bytes public autoPrompt;
+    bytes[3] private _autoSources;
+    bool public autoConfigured;
+    bool public resolutionTriggered;
+
     mapping(address => uint256) public yesOf;
     mapping(address => uint256) public noOf;
     mapping(address => uint256) public collateralOf; // for Invalid refunds
@@ -37,6 +61,8 @@ contract SeerMarket is ReentrancyGuard {
     event Sold(address indexed trader, Side side, uint256 shares, uint256 payout);
     event Resolved(Outcome outcome);
     event Claimed(address indexed trader, uint256 amount);
+    event AutoResolutionConfigured(address indexed oracle);
+    event ResolutionTriggered(uint256[3] requestIds);
 
     error TradingClosed();
     error SlippageTooHigh();
@@ -49,6 +75,11 @@ contract SeerMarket is ReentrancyGuard {
     error InvalidOutcome();
     error AlreadyClaimed();
     error NothingToClaim();
+    error NotFactory();
+    error AlreadyConfigured();
+    error NotConfigured();
+    error AlreadyTriggered();
+    error NotYetDue();
 
     constructor(
         address points_,
@@ -138,6 +169,47 @@ contract SeerMarket is ReentrancyGuard {
         if (outcome_ == Outcome.Pending) revert InvalidOutcome();
         outcome = outcome_;
         emit Resolved(outcome_);
+    }
+
+    // ─── Auto-resolution (Tasks Q + R) ─────────────────────────────────────────
+
+    // Called once by the factory right after deployment to arm autonomous
+    // resolution: stores the oracle, the three source payloads, and the
+    // inference prompt that triggerResolution() will hand to the oracle.
+    function configureAutoResolution(address oracle_, bytes[3] calldata sources_, bytes calldata prompt_) external {
+        if (msg.sender != factory) revert NotFactory();
+        if (autoConfigured) revert AlreadyConfigured();
+        oracle = oracle_;
+        _autoSources[0] = sources_[0];
+        _autoSources[1] = sources_[1];
+        _autoSources[2] = sources_[2];
+        autoPrompt = prompt_;
+        autoConfigured = true;
+        emit AutoResolutionConfigured(oracle_);
+    }
+
+    // Permissionless crank: once the deadline passes, anyone (in production, a
+    // Schedule subscription) starts the bonded resolution. The market is its own
+    // proposer — the oracle pulls the pre-funded bond from this contract and the
+    // forwarded msg.value covers the agent deposits. Fires exactly once.
+    function triggerResolution() external payable nonReentrant returns (uint256[3] memory requestIds) {
+        if (!autoConfigured) revert NotConfigured();
+        if (resolutionTriggered) revert AlreadyTriggered();
+        if (block.timestamp < deadline) revert NotYetDue();
+
+        resolutionTriggered = true;
+
+        bytes[] memory s = new bytes[](3);
+        s[0] = _autoSources[0];
+        s[1] = _autoSources[1];
+        s[2] = _autoSources[2];
+
+        requestIds = ISeerResolver(oracle).requestResolution{value: msg.value}(address(this), s, autoPrompt);
+        emit ResolutionTriggered(requestIds);
+    }
+
+    function autoSourceAt(uint256 i) external view returns (bytes memory) {
+        return _autoSources[i];
     }
 
     // Pull-payment claim: winners (and Invalid refundees) call this.

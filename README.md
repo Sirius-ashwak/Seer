@@ -59,11 +59,30 @@ requestResolution(market, sources[3], prompt)   [+ Points bond]
 | `SeerResolver.sol` | Bonded optimistic oracle. Fans out to three independent data sources via Somnia JSON API agents, synthesizes a verdict with an LLM inference agent, then runs the challenge / dispute / escalation / slashing lifecycle above. One instance resolves many markets. |
 | `SeerMarket.sol` | A single LS-LMSR binary YES/NO market. Tracks share balances internally (no transferable share tokens in v1) and escrows SEER Points as collateral. Lifecycle: Open → Resolved/Invalid → claims. |
 | `SeerSettlement.sol` | Authoritative bridge between oracle and market. Each market is constructed with this contract as its resolver; a permissionless `settle(market)` crank reads the resolver's finalized verdict, maps it to the market outcome, and opens the market's claim/refund path. |
-| `SeerMarketFactory.sol` | Deploys markets and seeds each with the LMSR opening cost in Points, so a market with zero bettors is still tradeable immediately. |
+| `SeerMarketFactory.sol` | Deploys markets and seeds each with the LMSR opening cost in Points, so a market with zero bettors is still tradeable immediately. Its reactor-only `onMarketProposed` is fired by a Somnia ContractEvent subscription to deploy, seed, pre-fund the oracle bond, and arm self-resolution in one call. |
+| `SeerSignalAgent.sol` | Discovery + orchestration. Anyone proposes a candidate market behind a creation bond; the agent scores its marketability via an LLM inference agent and emits `MarketProposed` once it clears the threshold. The creation bond is slashed to the treasury if the spawned market resolves INVALID (junk), and refunded otherwise. |
 | `SeerPoints.sol` | Soulbound, ERC-20-like settlement asset. Transfers and approvals revert; only the owner mints/burns, and registered operators move balances via `operatorTransfer` for escrow and slashing. |
 | `lib/LsLmsr.sol` | Liquidity-sensitive LMSR cost and price math, WAD-scaled and numerically stabilized with the log-sum-exp trick. |
 | `HelloAgent.sol` | Minimal probe that fires one agent request and stores the callback — used to validate the Somnia agent deposit math and callback shape on testnet. |
-| `interfaces/` | `IAgentRequester` (Somnia agent primitive) and `ISeerPoints`. |
+| `interfaces/` | `IAgentRequester` (Somnia agent primitive), `ISeerPoints`, and `ISeerResolver`. |
+
+## Somnia primitives
+
+SEER is built around three Somnia network primitives. The table maps each to the
+SEER component that consumes it and the on-chain entry point.
+
+| Somnia primitive | What it provides | SEER usage | Entry point |
+|---|---|---|---|
+| **JSON API agent** | Off-chain HTTP fetch, returned via callback | Three independent data sources are queried per resolution and reconciled before a verdict is formed | `SeerResolver.requestResolution` → `handleSourceResponse` |
+| **LLM inference agent** | Natural-language reasoning, returned via callback | Synthesizes the three sources into a YES/NO/INVALID verdict; also scores a candidate's marketability during discovery | `SeerResolver.handleSourceResponse` → LLM request; `SeerSignalAgent.propose` → `handleScoreResponse` |
+| **Advanced agent request** | Larger subcommittee with a stricter consensus threshold | A disputed verdict escalates to a bigger committee before finalizing | `SeerResolver.dispute` → `createAdvancedRequest` → `handleEscalationResponse` |
+| **ContractEvent subscription** | A reactor fires an on-chain call when a watched event is emitted | `MarketProposed` from the signal agent triggers reactive deploy + seed + bond pre-fund + auto-resolution arming in one block | `SeerSignalAgent` emits `MarketProposed` → `SeerMarketFactory.onMarketProposed` |
+| **Schedule subscription** | A timer fires a permissionless on-chain call | At the market deadline, the market becomes its own bonded proposer against the oracle — no off-chain trigger | `SeerMarket.triggerResolution` |
+
+The agent IDs and the reactor/scheduler subscriptions are environment-configured;
+see `.env.example`. The ContractEvent and Schedule subscriptions are registered
+off-chain against the deployed addresses — until then the reactor defaults to the
+deployer EOA and markets can be cranked manually.
 
 ## Repository layout
 
@@ -71,13 +90,14 @@ requestResolution(market, sources[3], prompt)   [+ Points bond]
 contracts/
   src/
     SeerResolver.sol         Bonded optimistic oracle + dispute lifecycle
-    SeerMarket.sol           LS-LMSR binary prediction market
-    SeerMarketFactory.sol    Market deployment + liquidity subsidy
+    SeerMarket.sol           LS-LMSR binary prediction market + self-resolution
+    SeerMarketFactory.sol    Market deployment + liquidity subsidy + reactive deploy
     SeerSettlement.sol       Oracle-to-market settlement bridge
+    SeerSignalAgent.sol      Market discovery, marketability scoring, creation bond
     SeerPoints.sol           Soulbound settlement token
     HelloAgent.sol           Agent-callback probe
     lib/LsLmsr.sol           LMSR cost/price math
-    interfaces/              IAgentRequester, ISeerPoints
+    interfaces/              IAgentRequester, ISeerPoints, ISeerResolver
   test/                      Foundry tests, including mocks/
   script/                    Deploy.s.sol, Ask.s.sol
   foundry.toml
@@ -100,9 +120,11 @@ forge build
 forge test
 ```
 
-The suite contains 128 tests across six suites, covering the LMSR math
+The suite contains 151 tests across eight suites, covering the LMSR math
 (including fuzz runs), market trading and claims, the soulbound token, the
-factory subsidy, the full resolver dispute/slashing/refund lifecycle, and the
+factory subsidy, the full resolver dispute/slashing/refund lifecycle, the
+reactive auto-deploy + auto-resolution path, the discovery + creation-bond
+flow (marketability scoring, slash on INVALID, refund otherwise), and the
 end-to-end settlement path from a finalized oracle verdict to winning claims.
 
 ```bash
