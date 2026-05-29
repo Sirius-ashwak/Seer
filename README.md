@@ -120,12 +120,16 @@ forge build
 forge test
 ```
 
-The suite contains 151 tests across eight suites, covering the LMSR math
+The suite contains 184 tests across eleven suites, covering the LMSR math
 (including fuzz runs), market trading and claims, the soulbound token, the
 factory subsidy, the full resolver dispute/slashing/refund lifecycle, the
 reactive auto-deploy + auto-resolution path, the discovery + creation-bond
-flow (marketability scoring, slash on INVALID, refund otherwise), and the
-end-to-end settlement path from a finalized oracle verdict to winning claims.
+flow (marketability scoring, slash on INVALID, refund otherwise), the
+end-to-end settlement path from a finalized oracle verdict to winning claims,
+source hardening (HTML sanitization + permissioned registry + provider
+diversity), the MEV guard (commit-reveal that defeats an atomic sandwich), and
+LS-LMSR invariants (solvency, price consistency, share-accounting conservation)
+verified across thousands of randomized trades.
 
 ```bash
 forge test -vvv                          # verbose traces
