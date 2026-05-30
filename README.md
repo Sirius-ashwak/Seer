@@ -17,6 +17,38 @@ system permissionless to experiment with.
 > The contracts are covered by an extensive test suite but have **not** been
 > audited. Do not deploy with real value.
 
+## Architecture at a glance
+
+The system reads top-to-bottom: a market is discovered, deployed with liquidity,
+traded, resolved by the agent network, and settled back to the market.
+
+```
+  Discovery    creator stakes a creation bond
+                    |
+                    v
+               SeerSignalAgent --(LLM marketability score)--> emits MarketProposed
+                    |
+                    |  ContractEvent subscription fires the factory reactor
+                    v
+  Liquidity    SeerMarketFactory --(deploy + seed with Points subsidy)--> tradeable at block 0
+                    |
+                    v
+  Trading      SeerMarket (LS-LMSR YES/NO) <--(buy / sell / claim)--> traders
+                    |
+                    |  at the deadline the market becomes its own proposer:
+                    |  triggerResolution()  (Schedule subscription)
+                    v
+  Resolution   SeerResolver --(3x JSON API agents)--> LLM inference --> verdict
+                    |                                       \
+                    |  undisputed + window elapsed           \  dispute() --> advanced committee
+                    v                                           (reverses + slashes)
+  Settlement   SeerSettlement.settle(market) --(reads finalOutcomeOf)--> market opens claims
+```
+
+`SeerPoints` sits underneath all of it as the soulbound settlement asset: trading
+collateral, proposer/disputer bonds, and creation bonds — escrowed and slashed by
+registered operators. The next section details the resolution lifecycle itself.
+
 ## How resolution works
 
 Resolution follows an optimistic-oracle pattern. A proposer kicks off a
@@ -99,8 +131,18 @@ contracts/
     lib/LsLmsr.sol           LMSR cost/price math
     interfaces/              IAgentRequester, ISeerPoints, ISeerResolver
   test/                      Foundry tests, including mocks/
-  script/                    Deploy.s.sol, Ask.s.sol
+  script/
+    Deploy.s.sol             Full-stack testnet deploy
+    SeedLocal.s.sol          Local-only deploy + demo-market seeding (mock agents)
+    Ask.s.sol                Agent-probe helper
   foundry.toml
+frontend/                    Vite + React + TypeScript demo UI
+  src/
+    components/              Market grid/detail, trade panel, resolution receipt
+    hooks/                   Wallet, market data, faucet, resolution audit trail
+    lib/                     ethers contract factories, formatting, tx helpers
+    config.ts                Network presets + deployed addresses (set ACTIVE)
+    abi.ts                   Human-readable ABI fragments
 ```
 
 ## Getting started
@@ -153,6 +195,59 @@ cp contracts/.env.example contracts/.env
 | `SOMNIA_EXPLORER_KEY` | Contract verification on the Shannon explorer |
 
 Never commit a populated `.env` or any private key.
+
+## Run the demo locally
+
+The fastest way to see SEER end-to-end — no testnet funds required — is a local
+anvil chain seeded with demo markets, plus the React frontend. This needs
+[Node.js 18+](https://nodejs.org) in addition to Foundry.
+
+```bash
+# 1. start a local chain and leave it running
+anvil
+
+# 2. in a second shell: deploy the full stack and seed demo markets
+cd contracts
+PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  forge script script/SeedLocal.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+```
+
+`SeedLocal.s.sol` deploys the stack against a mock agent requester (so the agent
+callbacks can be driven on anvil) and seeds five markets. It drives two through
+the resolver: market 0 (three sources agree, LLM proposes YES) is left mid
+challenge window, and market 1 is proposed YES, disputed, and reversed to NO by
+the escalation committee, then settled — exercising the full dispute path. To
+finalize the undisputed market 0 (the addresses below are deterministic on a
+fresh anvil; otherwise read them from the script's log):
+
+```bash
+RPC=http://127.0.0.1:8545
+KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+RESOLVER=0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
+SETTLEMENT=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
+MARKET0=0x856e4424f806D16E8CBC702B3c0F2ede5468eae5
+cast rpc evm_increaseTime 1860 --rpc-url $RPC   # advance past the 30-min window
+cast rpc evm_mine --rpc-url $RPC
+cast send $RESOLVER 'finalize(address)' $MARKET0 --private-key $KEY --rpc-url $RPC
+cast send $SETTLEMENT 'settle(address)' $MARKET0 --private-key $KEY --rpc-url $RPC
+```
+
+```bash
+# 3. in a third shell: run the frontend
+cd frontend
+npm install
+npm run dev          # serves http://localhost:5173
+```
+
+The frontend defaults to the `local` preset in `src/config.ts`, whose addresses
+match `SeedLocal`'s deterministic deploy, so no edits are needed. Point a wallet
+at `http://127.0.0.1:8545` (chain id `31337`) and import an anvil test key, then
+connect, claim test Points from the faucet, trade a market, and open a resolved
+market to see its full on-chain resolution receipt — sources, the LLM prompt and
+verdict, both bonds, and the finalized (or reversed) outcome.
+
+To target the live testnet instead, set `ACTIVE = "somniaTestnet"` in
+`src/config.ts` and fill in the addresses logged by `Deploy.s.sol`.
 
 ## Deploying to Somnia testnet
 

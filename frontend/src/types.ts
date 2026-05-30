@@ -6,13 +6,15 @@ export interface MarketSummary {
   priceYes: bigint;
   priceNo: bigint;
   outcome: number;
-}
-
-export interface MarketDetail extends MarketSummary {
+  // Cheap extra reads used for discovery sort/filter.
   deadline: number;
   qYes: bigint;
   qNo: bigint;
+}
+
+export interface MarketDetail extends MarketSummary {
   largeBetBps: bigint;
+  liquidity: bigint; // LS-LMSR b parameter, for the price-impact estimate
   // Per-account position (zeroed when no wallet is connected).
   yes: bigint;
   no: bigint;
