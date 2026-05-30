@@ -1,0 +1,109 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/* ── Vercel-monochrome design tokens ───────────────────────────────────────
+   Near-black canvas, white primary, one blue link accent, hairline borders.
+   YES-green / NO-red are reserved strictly for market data, never chrome. */
+@theme {
+  --color-canvas: #0a0a0a;
+  --color-panel: #111113;
+  --color-panel-2: #18181b;
+  --color-elevated: #1f1f23;
+  --color-line: #242427;
+  --color-line-strong: #3a3a40;
+  --color-ink: #ededed;
+  --color-muted: #a1a1aa;
+  --color-faint: #6b6b73;
+  --color-primary: #fafafa;
+  --color-accent: #3b82f6;
+  --color-yes: #28c76f;
+  --color-yes-soft: rgba(40, 199, 111, 0.14);
+  --color-no: #f0506e;
+  --color-no-soft: rgba(240, 80, 110, 0.14);
+
+  --radius-card: 0.875rem;
+  --radius-control: 0.625rem;
+
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+  --animate-rise: rise 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes shimmer {
+  0% { opacity: 0.45; }
+  50% { opacity: 0.9; }
+  100% { opacity: 0.45; }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    color-scheme: dark;
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv01", "cv03", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* faint top glow + barely-there dot grid for depth */
+    background-image:
+      radial-gradient(60rem 32rem at 50% -12rem, rgba(120, 130, 160, 0.12), transparent 70%),
+      radial-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+    background-size: 100% 100%, 22px 22px;
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: rgba(255, 255, 255, 0.16);
+  }
+
+  /* tabular numerics everywhere prices/balances render */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line-strong);
+    border-radius: 999px;
+    border: 2px solid var(--color-canvas);
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
