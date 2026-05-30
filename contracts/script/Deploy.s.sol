@@ -56,6 +56,11 @@ contract Deploy is Script {
     uint256 constant CREATION_BOND = 5 ether;
     uint256 constant SCORE_THRESHOLD = 6_000; // bps, of SCORE_DENOMINATOR
 
+    // Test-Points faucet (v1 play-money): hand each address a batch on a cooldown
+    // so traders can use markets from the browser. Retune/disable via setFaucet.
+    uint256 constant FAUCET_AMOUNT = 1_000 ether;
+    uint256 constant FAUCET_COOLDOWN = 1 days;
+
     struct Deployed {
         HelloAgent hello;
         SeerPoints points;
@@ -117,6 +122,9 @@ contract Deploy is Script {
 
         // Arm reactive deployment.
         d.factory.setReactor(reactor);
+
+        // Open the test-Points faucet so browser traders can self-fund.
+        d.factory.setFaucet(FAUCET_AMOUNT, FAUCET_COOLDOWN);
 
         vm.stopBroadcast();
 

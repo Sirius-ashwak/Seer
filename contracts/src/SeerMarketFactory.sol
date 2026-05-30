@@ -61,6 +61,15 @@ contract SeerMarketFactory {
     mapping(address => bool) public isMarket;
     mapping(uint256 => address) public marketForProposal;
 
+    // Self-service test-Points faucet. Because SeerPoints minting is owner-only
+    // and the factory holds that role, the faucet lives here. v1 Points are
+    // soulbound play-money with no settlement value, so this is participation
+    // plumbing, not an economic lever — it would be gated/removed once Points
+    // gain real value. faucetAmount == 0 disables it.
+    uint256 public faucetAmount;
+    uint256 public faucetCooldown;
+    mapping(address => uint256) public nextFaucetClaim;
+
     event MarketCreated(
         address indexed market,
         address indexed creator,
@@ -76,6 +85,8 @@ contract SeerMarketFactory {
     event ReactorChanged(address indexed previousReactor, address indexed newReactor);
     event SubsidyCapChanged(uint256 previousCap, uint256 newCap);
     event AlphaBoundsChanged(uint256 minAlpha, uint256 maxAlpha);
+    event FaucetConfigured(uint256 amount, uint256 cooldown);
+    event FaucetClaimed(address indexed claimant, uint256 amount);
 
     error AdminOnly();
     error NotReactor();
@@ -84,6 +95,8 @@ contract SeerMarketFactory {
     error DeadlineInPast();
     error InvalidAlpha();
     error EmptySeed();
+    error FaucetDisabled();
+    error FaucetOnCooldown(uint256 readyAt);
 
     modifier onlyAdmin() {
         if (msg.sender != admin) revert AdminOnly();
@@ -170,7 +183,27 @@ contract SeerMarketFactory {
         emit MarketCreated(market, creator, resolver, question, deadline, alphaWad, seedYes, seedNo, subsidy);
     }
 
+    // ─── Faucet ─────────────────────────────────────────────────────────────
+
+    // Mint a fixed batch of test Points to the caller, rate-limited per address.
+    function faucet() external returns (uint256 amount) {
+        amount = faucetAmount;
+        if (amount == 0) revert FaucetDisabled();
+        uint256 readyAt = nextFaucetClaim[msg.sender];
+        if (block.timestamp < readyAt) revert FaucetOnCooldown(readyAt);
+
+        nextFaucetClaim[msg.sender] = block.timestamp + faucetCooldown;
+        points.mint(msg.sender, amount);
+        emit FaucetClaimed(msg.sender, amount);
+    }
+
     // ─── Admin ──────────────────────────────────────────────────────────────
+
+    function setFaucet(uint256 amount, uint256 cooldown) external onlyAdmin {
+        faucetAmount = amount;
+        faucetCooldown = cooldown;
+        emit FaucetConfigured(amount, cooldown);
+    }
 
     function setReactor(address newReactor) external onlyAdmin {
         emit ReactorChanged(reactor, newReactor);

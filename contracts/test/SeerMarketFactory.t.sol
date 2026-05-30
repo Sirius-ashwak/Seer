@@ -145,4 +145,71 @@ contract SeerMarketFactoryTest is Test {
         assertEq(factory.minAlphaWad(), MIN_ALPHA);
         assertEq(factory.maxAlphaWad(), MAX_ALPHA);
     }
+
+    // ─── Faucet ──────────────────────────────────────────────────────────────
+
+    uint256 internal constant FAUCET_AMOUNT = 1_000 ether;
+    uint256 internal constant FAUCET_COOLDOWN = 1 days;
+
+    function _openFaucet() internal {
+        vm.prank(admin);
+        factory.setFaucet(FAUCET_AMOUNT, FAUCET_COOLDOWN);
+    }
+
+    function test_setFaucet_onlyAdmin() public {
+        vm.expectRevert(SeerMarketFactory.AdminOnly.selector);
+        factory.setFaucet(FAUCET_AMOUNT, FAUCET_COOLDOWN);
+    }
+
+    function test_faucet_disabledByDefault() public {
+        vm.prank(alice);
+        vm.expectRevert(SeerMarketFactory.FaucetDisabled.selector);
+        factory.faucet();
+    }
+
+    function test_faucet_mintsToCaller() public {
+        _openFaucet();
+        vm.prank(alice);
+        factory.faucet();
+        assertEq(points.balanceOf(alice), FAUCET_AMOUNT);
+    }
+
+    function test_faucet_enforcesCooldown() public {
+        _openFaucet();
+
+        vm.prank(alice);
+        factory.faucet();
+
+        uint256 readyAt = block.timestamp + FAUCET_COOLDOWN;
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(SeerMarketFactory.FaucetOnCooldown.selector, readyAt));
+        factory.faucet();
+
+        // After the cooldown elapses the caller can claim again.
+        vm.warp(readyAt);
+        vm.prank(alice);
+        factory.faucet();
+        assertEq(points.balanceOf(alice), 2 * FAUCET_AMOUNT);
+    }
+
+    function test_faucet_independentPerAddress() public {
+        _openFaucet();
+        vm.prank(alice);
+        factory.faucet();
+        // Bob is unaffected by Alice's cooldown.
+        address bob = address(0xB0B);
+        vm.prank(bob);
+        factory.faucet();
+        assertEq(points.balanceOf(bob), FAUCET_AMOUNT);
+    }
+
+    function test_setFaucet_zeroAmountDisables() public {
+        _openFaucet();
+        vm.prank(admin);
+        factory.setFaucet(0, 0);
+
+        vm.prank(alice);
+        vm.expectRevert(SeerMarketFactory.FaucetDisabled.selector);
+        factory.faucet();
+    }
 }
