@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useWallet } from "@/hooks/useWallet";
 import { marketContract } from "@/lib/contracts";
+import { record } from "@/lib/activity";
 import { runTx } from "@/lib/tx";
 import type { MarketDetail } from "@/types";
 
@@ -32,7 +33,15 @@ export function ClaimPanel({ detail, onClaimed }: { detail: MarketDetail; onClai
         "Claiming winnings",
         () => marketContract(detail.address, signer).claim() as Promise<ContractTransactionResponse>,
       );
-      if (ok) onClaimed();
+      if (ok) {
+        record(account, {
+          type: "claim",
+          market: detail.address,
+          question: detail.question,
+          detail: "Claim winnings",
+        });
+        onClaimed();
+      }
     } finally {
       setBusy(false);
     }

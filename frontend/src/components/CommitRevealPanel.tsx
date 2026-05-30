@@ -7,18 +7,26 @@ import { SIDE } from "@/abi";
 import { useWallet } from "@/hooks/useWallet";
 import { marketContract, readProvider } from "@/lib/contracts";
 import { clearCommit } from "@/lib/commits";
+import { record } from "@/lib/activity";
 import { runTx } from "@/lib/tx";
 import { fmt } from "@/lib/format";
 import type { PendingCommit } from "@/types";
 
 interface CommitRevealPanelProps {
   market: string;
+  question?: string;
   pending: PendingCommit;
   onResolved: () => void;
   onDiscard: () => void;
 }
 
-export function CommitRevealPanel({ market, pending, onResolved, onDiscard }: CommitRevealPanelProps) {
+export function CommitRevealPanel({
+  market,
+  question,
+  pending,
+  onResolved,
+  onDiscard,
+}: CommitRevealPanelProps) {
   const { account, signer } = useWallet();
   const [busy, setBusy] = useState(false);
 
@@ -45,6 +53,12 @@ export function CommitRevealPanel({ market, pending, onResolved, onDiscard }: Co
       );
       if (ok) {
         clearCommit(market, account);
+        record(account, {
+          type: "reveal",
+          market,
+          question,
+          detail: `Reveal ${pending.isBuy ? "buy" : "sell"} ${fmt(shares)} ${sideLabel}`,
+        });
         onResolved();
       }
     } finally {
