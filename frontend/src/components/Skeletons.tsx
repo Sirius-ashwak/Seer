@@ -11,6 +11,7 @@ export function MarketCardSkeleton() {
       <Skeleton className="mb-2 h-4 w-full" />
       <Skeleton className="mb-4 h-4 w-2/3" />
       <Skeleton className="h-7 w-full rounded-lg" />
+      <Skeleton className="mt-3 h-6 w-full" />
     </Card>
   );
 }

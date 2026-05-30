@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Clock, Layers } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PriceBar } from "@/components/PriceBar";
+import { Sparkline } from "@/components/Sparkline";
 import { OUTCOME_LABELS } from "@/abi";
-import { short } from "@/lib/format";
+import { useMarketHistory } from "@/hooks/useMarketHistory";
+import { fmtCompact, short, timeUntil } from "@/lib/format";
 import type { MarketSummary } from "@/types";
 
 const outcomeTone = ["open", "yes", "no", "invalid"] as const;
@@ -17,6 +19,7 @@ interface MarketCardProps {
 
 export function MarketCard({ market, index, onSelect }: MarketCardProps) {
   const resolved = market.outcome !== 0;
+  const { prices } = useMarketHistory(market.address, 24);
 
   return (
     <motion.button
@@ -43,7 +46,20 @@ export function MarketCard({ market, index, onSelect }: MarketCardProps) {
 
         <PriceBar priceYes={market.priceYes} priceNo={market.priceNo} />
 
-        {!resolved && <p className="mt-3 text-xs text-faint">Trading open</p>}
+        <Sparkline prices={prices} className="mt-3" />
+
+        <div className="mt-2 flex items-center justify-between text-xs text-faint">
+          <span className="inline-flex items-center gap-1">
+            <Layers className="size-3.5" />
+            {fmtCompact(market.qYes + market.qNo)} liquidity
+          </span>
+          {!resolved && (
+            <span className="inline-flex items-center gap-1">
+              <Clock className="size-3.5" />
+              {timeUntil(market.deadline)}
+            </span>
+          )}
+        </div>
       </Card>
     </motion.button>
   );

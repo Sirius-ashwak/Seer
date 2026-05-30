@@ -18,7 +18,7 @@ export function useMarket(address: string | null, account: string | null): Marke
       return;
     }
     const m = marketContract(address, readProvider);
-    const [question, deadline, outcome, priceYes, priceNo, qYes, qNo, largeBetBps] =
+    const [question, deadline, outcome, priceYes, priceNo, qYes, qNo, largeBetBps, liquidity] =
       await Promise.all([
         m.question() as Promise<string>,
         m.deadline() as Promise<bigint>,
@@ -28,6 +28,7 @@ export function useMarket(address: string | null, account: string | null): Marke
         m.qYes() as Promise<bigint>,
         m.qNo() as Promise<bigint>,
         m.largeBetBps() as Promise<bigint>,
+        m.liquidity() as Promise<bigint>,
       ]);
 
     const [yes, no, collateral, claimed] = account
@@ -49,6 +50,7 @@ export function useMarket(address: string | null, account: string | null): Marke
       qYes,
       qNo,
       largeBetBps,
+      liquidity,
       yes,
       no,
       collateral,

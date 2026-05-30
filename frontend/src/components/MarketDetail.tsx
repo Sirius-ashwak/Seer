@@ -4,13 +4,18 @@ import { ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { PriceBar } from "@/components/PriceBar";
+import { PriceChart } from "@/components/PriceChart";
 import { PositionStats } from "@/components/PositionStats";
+import { MarketStats } from "@/components/MarketStats";
 import { TradePanel } from "@/components/TradePanel";
 import { CommitRevealPanel } from "@/components/CommitRevealPanel";
 import { ClaimPanel } from "@/components/ClaimPanel";
+import { ResolutionActions } from "@/components/ResolutionActions";
+import { AgentSimulator } from "@/components/AgentSimulator";
 import { ResolutionReceipt } from "@/components/ResolutionReceipt";
 import { OUTCOME_LABELS } from "@/abi";
 import { useMarket } from "@/hooks/useMarket";
+import { useMarketHistory } from "@/hooks/useMarketHistory";
 import { useResolution } from "@/hooks/useResolution";
 import { loadCommit } from "@/lib/commits";
 import { short, timeUntil } from "@/lib/format";
@@ -28,6 +33,11 @@ interface MarketDetailProps {
 export function MarketDetail({ address, account, onBack, afterTrade }: MarketDetailProps) {
   const { detail, loading, refresh } = useMarket(address, account);
   const { resolution, loading: resLoading, refresh: refreshResolution } = useResolution(address);
+  const { prices, loading: historyLoading } = useMarketHistory(
+    address,
+    48,
+    detail?.priceYes.toString(),
+  );
   const [pending, setPending] = useState<PendingCommit | null>(null);
 
   useEffect(() => {
@@ -79,11 +89,19 @@ export function MarketDetail({ address, account, onBack, afterTrade }: MarketDet
 
             <PriceBar priceYes={detail.priceYes} priceNo={detail.priceNo} size="lg" />
 
+            <div className="mt-6">
+              <PriceChart prices={prices} loading={historyLoading} />
+            </div>
+
             {account && (
               <div className="mt-6">
                 <PositionStats yes={detail.yes} no={detail.no} />
               </div>
             )}
+
+            <div className="mt-6">
+              <MarketStats detail={detail} resolution={resolution} />
+            </div>
           </div>
 
           <div className="grid content-start gap-4">
@@ -100,6 +118,7 @@ export function MarketDetail({ address, account, onBack, afterTrade }: MarketDet
                 {pending && (
                   <CommitRevealPanel
                     market={detail.address}
+                    question={detail.question}
                     pending={pending}
                     onResolved={() => {
                       setPending(null);
@@ -110,6 +129,9 @@ export function MarketDetail({ address, account, onBack, afterTrade }: MarketDet
                 )}
               </>
             )}
+
+            <ResolutionActions detail={detail} resolution={resolution} onAction={handleTraded} />
+            <AgentSimulator detail={detail} resolution={resolution} onAction={handleTraded} />
           </div>
 
           {resolution?.exists && (
