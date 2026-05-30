@@ -1,18 +1,26 @@
-import { Inbox, PlugZap, Settings2 } from "lucide-react";
+import { Inbox, PlugZap, SearchX, Settings2 } from "lucide-react";
 import { MarketCard } from "@/components/MarketCard";
 import { MarketGridSkeleton } from "@/components/Skeletons";
 import { EmptyState } from "@/components/EmptyState";
 import type { MarketSummary } from "@/types";
 
 interface MarketGridProps {
-  markets: MarketSummary[];
+  markets: MarketSummary[]; // already filtered/sorted
+  totalCount: number; // unfiltered count, to distinguish "none" from "no matches"
   loading: boolean;
   error: string | null;
   configured: boolean;
   onSelect: (address: string) => void;
 }
 
-export function MarketGrid({ markets, loading, error, configured, onSelect }: MarketGridProps) {
+export function MarketGrid({
+  markets,
+  totalCount,
+  loading,
+  error,
+  configured,
+  onSelect,
+}: MarketGridProps) {
   if (!configured) {
     return (
       <EmptyState
@@ -34,12 +42,22 @@ export function MarketGrid({ markets, loading, error, configured, onSelect }: Ma
     return <EmptyState icon={PlugZap} title="Can't reach the network" description={error} />;
   }
 
-  if (markets.length === 0) {
+  if (totalCount === 0) {
     return (
       <EmptyState
         icon={Inbox}
         title="No markets yet"
-        description="Deploy a market with the factory to start trading. The list refreshes automatically."
+        description="Create a market with the factory to start trading. The list refreshes automatically."
+      />
+    );
+  }
+
+  if (markets.length === 0) {
+    return (
+      <EmptyState
+        icon={SearchX}
+        title="No matching markets"
+        description="Try a different search term or filter."
       />
     );
   }

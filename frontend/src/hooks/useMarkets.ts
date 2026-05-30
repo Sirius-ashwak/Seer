@@ -13,13 +13,25 @@ interface MarketsState {
 
 async function loadSummary(address: string): Promise<MarketSummary> {
   const m = marketContract(address, readProvider);
-  const [question, priceYes, priceNo, outcome] = await Promise.all([
+  const [question, priceYes, priceNo, outcome, deadline, qYes, qNo] = await Promise.all([
     m.question() as Promise<string>,
     m.priceYes() as Promise<bigint>,
     m.priceNo() as Promise<bigint>,
     m.outcome() as Promise<bigint>,
+    m.deadline() as Promise<bigint>,
+    m.qYes() as Promise<bigint>,
+    m.qNo() as Promise<bigint>,
   ]);
-  return { address, question, priceYes, priceNo, outcome: Number(outcome) };
+  return {
+    address,
+    question,
+    priceYes,
+    priceNo,
+    outcome: Number(outcome),
+    deadline: Number(deadline),
+    qYes,
+    qNo,
+  };
 }
 
 export function useMarkets(): MarketsState {
