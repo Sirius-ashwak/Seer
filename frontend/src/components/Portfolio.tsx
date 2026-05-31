@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/EmptyState";
 import { ActivityFeed } from "@/components/ActivityFeed";
+import { PriceChart } from "@/components/PriceChart";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { OUTCOME_LABELS } from "@/abi";
+import { OUTCOME_LABELS, Outcome } from "@/abi";
 import { usePortfolio, type PortfolioPosition } from "@/hooks/usePortfolio";
+import { useMarketHistory } from "@/hooks/useMarketHistory";
 import { useWallet } from "@/hooks/useWallet";
 import { marketContract } from "@/lib/contracts";
 import { runTx } from "@/lib/tx";
@@ -30,6 +32,16 @@ export function Portfolio({ account, onSelect, afterAction }: PortfolioProps) {
   const { positions, totalValue, claimableValue, claimableCount, loading, refresh } =
     usePortfolio(account);
   const [claiming, setClaiming] = useState(false);
+
+  // The user's largest open position drives the chart. There's no honest
+  // portfolio value-over-time series (no snapshots), so we show this market's
+  // real YES-probability history rather than a fabricated P&L line.
+  const openPositions = positions.filter((p) => p.outcome === Outcome.Pending);
+  const headline = [...openPositions].sort((a, b) => Number(b.value - a.value))[0] ?? null;
+  const history = useMarketHistory(headline?.address ?? null, {
+    maxPoints: 48,
+    refreshKey: headline?.value.toString(),
+  });
 
   if (!account) {
     return (
@@ -73,14 +85,20 @@ export function Portfolio({ account, onSelect, afterAction }: PortfolioProps) {
     }
   };
 
-  const open = positions.filter((p) => p.outcome === 0);
-  const resolved = positions.filter((p) => p.outcome !== 0);
+  const open = openPositions;
+  const resolved = positions.filter((p) => p.outcome !== Outcome.Pending);
 
   return (
     <div className="grid gap-6">
       {/* Summary */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <SummaryTile label="Portfolio value" value={`${fmt(totalValue)}`} suffix="Points" />
+        <Card className="p-4">
+          <div className="text-xs font-medium uppercase tracking-wide text-faint">Portfolio value</div>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="font-hero tnum text-[34px] leading-none text-ink">{fmt(totalValue)}</span>
+            <span className="text-sm text-faint">Points</span>
+          </div>
+        </Card>
         <SummaryTile label="Open positions" value={String(open.length)} />
         <Card className="flex items-center justify-between gap-3 p-4">
           <div>
@@ -97,6 +115,22 @@ export function Portfolio({ account, onSelect, afterAction }: PortfolioProps) {
           )}
         </Card>
       </div>
+
+      {/* Top open position — real YES-probability history (not a P&L line). */}
+      {headline && (
+        <section className="grid gap-2">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-semibold text-ink">Top position</h2>
+            <button
+              onClick={() => onSelect(headline.address)}
+              className="truncate text-[13px] text-muted transition-colors hover:text-ink"
+            >
+              {headline.question}
+            </button>
+          </div>
+          <PriceChart prices={history.prices} tradeCount={history.tradeCount} loading={history.loading} />
+        </section>
+      )}
 
       {loading ? (
         <Skeleton className="h-40 w-full rounded-[var(--radius-card)]" />
@@ -129,9 +163,9 @@ export function Portfolio({ account, onSelect, afterAction }: PortfolioProps) {
         </Card>
       )}
 
-      {/* Activity */}
+      {/* Recent activity */}
       <section className="grid gap-3">
-        <h2 className="text-sm font-semibold text-ink">Activity</h2>
+        <h2 className="text-sm font-semibold text-ink">Recent activity</h2>
         <ActivityFeed account={account} />
       </section>
     </div>
