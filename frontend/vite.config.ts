@@ -11,7 +11,9 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    // Honor the PORT env when set (e.g. the Claude preview harness assigns one),
+    // otherwise default to 5173. Lets the preview browser reach the dev server.
+    port: Number(process.env.PORT) || 5173,
     host: true,
   },
 });
