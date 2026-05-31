@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 interface PriceChartProps {
   prices: number[]; // YES probability, 0..1, oldest → newest
+  tradeCount: number; // total trades behind the series (pre-sampling)
   loading: boolean;
 }
 
@@ -13,7 +14,7 @@ interface PriceChartProps {
 // meaningful, not auto-zoomed) with a 50% reference line and a gradient fill.
 // X is per-trade, not time — labeled as such. Falls back to a quiet empty
 // state before the first trade.
-export function PriceChart({ prices, loading }: PriceChartProps) {
+export function PriceChart({ prices, tradeCount, loading }: PriceChartProps) {
   const gradId = useId();
 
   if (loading) {
@@ -50,6 +51,9 @@ export function PriceChart({ prices, loading }: PriceChartProps) {
         <div className="flex items-center gap-1.5 text-xs font-medium text-muted">
           <LineChart className="size-3.5 text-faint" />
           YES probability
+          <span className="font-normal text-faint">
+            · {tradeCount} trade{tradeCount === 1 ? "" : "s"}
+          </span>
         </div>
         <div className="tnum flex items-baseline gap-2 text-sm">
           <span className="font-semibold text-ink">{(last * 100).toFixed(1)}%</span>
@@ -98,7 +102,7 @@ export function PriceChart({ prices, loading }: PriceChartProps) {
       </svg>
 
       <div className="mt-2 flex justify-between text-[11px] text-faint">
-        <span>{prices.length - 1} trades ago</span>
+        <span>earliest</span>
         <span>now</span>
       </div>
     </Card>

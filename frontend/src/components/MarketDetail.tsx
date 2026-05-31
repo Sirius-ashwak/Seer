@@ -33,11 +33,11 @@ interface MarketDetailProps {
 export function MarketDetail({ address, account, onBack, afterTrade }: MarketDetailProps) {
   const { detail, loading, refresh } = useMarket(address, account);
   const { resolution, loading: resLoading, refresh: refreshResolution } = useResolution(address);
-  const { prices, loading: historyLoading } = useMarketHistory(
-    address,
-    48,
-    detail?.priceYes.toString(),
-  );
+  const {
+    prices,
+    tradeCount,
+    loading: historyLoading,
+  } = useMarketHistory(address, { refreshKey: detail?.priceYes.toString() });
   const [pending, setPending] = useState<PendingCommit | null>(null);
 
   useEffect(() => {
@@ -90,7 +90,7 @@ export function MarketDetail({ address, account, onBack, afterTrade }: MarketDet
             <PriceBar priceYes={detail.priceYes} priceNo={detail.priceNo} size="lg" />
 
             <div className="mt-6">
-              <PriceChart prices={prices} loading={historyLoading} />
+              <PriceChart prices={prices} tradeCount={tradeCount} loading={historyLoading} />
             </div>
 
             {account && (

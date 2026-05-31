@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowUpRight, Clock, Layers } from "lucide-react";
 import { Card } from "@/components/ui/Card";
@@ -19,10 +20,31 @@ interface MarketCardProps {
 
 export function MarketCard({ market, index, onSelect }: MarketCardProps) {
   const resolved = market.outcome !== 0;
-  const { prices } = useMarketHistory(market.address, 24);
+  const ref = useRef<HTMLButtonElement>(null);
+  // Defer the per-card archival price scan until the card is near the viewport,
+  // so a long grid doesn't fan out one RPC sweep per card on first paint.
+  const [inView, setInView] = useState(false);
+  const { prices } = useMarketHistory(market.address, { maxPoints: 24, enabled: inView });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || inView) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setInView(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [inView]);
 
   return (
     <motion.button
+      ref={ref}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: Math.min(index * 0.04, 0.3), ease: [0.16, 1, 0.3, 1] }}
