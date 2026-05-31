@@ -111,6 +111,13 @@
     color: transparent;
   }
 
+  /* Editorial serif for hero numerals — borrowed from Origin. System serif
+     stack (zero font dependency); pair with .tnum to keep digits tabular. */
+  .font-hero {
+    font-family: ui-serif, Georgia, "Times New Roman", serif;
+    letter-spacing: -0.01em;
+  }
+
   /* A floating surface: layered fill, hairline, and the soft drop shadow. */
   .surface-pop {
     background-color: var(--color-elevated);

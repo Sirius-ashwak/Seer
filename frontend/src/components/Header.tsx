@@ -1,22 +1,29 @@
-import { Briefcase, LineChart, Plus, Settings } from "lucide-react";
+import { Briefcase, Home, LineChart, Plus, Settings, Sparkles } from "lucide-react";
 import { ConnectButton } from "@/components/ConnectButton";
 import { FaucetButton } from "@/components/FaucetButton";
 import { Button } from "@/components/ui/Button";
-import { Tabs } from "@/components/ui/Tabs";
+import { Tabs, type TabOption } from "@/components/ui/Tabs";
 import { useWallet } from "@/hooks/useWallet";
 import { CONFIG } from "@/config";
 import { fmt } from "@/lib/format";
 
-export type ViewKey = "markets" | "portfolio";
+export type ViewKey = "overview" | "markets" | "portfolio";
+
+const TABS: TabOption<ViewKey>[] = [
+  { label: "Overview", value: "overview", icon: Home },
+  { label: "Markets", value: "markets", icon: LineChart },
+  { label: "Portfolio", value: "portfolio", icon: Briefcase },
+];
 
 interface HeaderProps {
   view: ViewKey;
   onView: (v: ViewKey) => void;
   onCreate: () => void;
   onSettings: () => void;
+  onAsk: () => void;
 }
 
-export function Header({ view, onView, onCreate, onSettings }: HeaderProps) {
+export function Header({ view, onView, onCreate, onSettings, onAsk }: HeaderProps) {
   const { account, balance } = useWallet();
 
   return (
@@ -28,15 +35,7 @@ export function Header({ view, onView, onCreate, onSettings }: HeaderProps) {
         </div>
 
         <nav className="ml-2 hidden sm:block">
-          <Tabs
-            aria-label="Views"
-            value={view}
-            onChange={onView}
-            options={[
-              { label: "Markets", value: "markets", icon: LineChart },
-              { label: "Portfolio", value: "portfolio", icon: Briefcase },
-            ]}
-          />
+          <Tabs aria-label="Views" value={view} onChange={onView} options={TABS} />
         </nav>
 
         <div className="ml-auto flex items-center gap-2.5">
@@ -50,6 +49,11 @@ export function Header({ view, onView, onCreate, onSettings }: HeaderProps) {
               {fmt(balance)} <span className="text-faint">SEER</span>
             </span>
           )}
+
+          <Button variant="secondary" size="sm" onClick={onAsk}>
+            <Sparkles className="size-4 text-accent" />
+            <span className="hidden sm:inline">Ask SEER</span>
+          </Button>
 
           <Button variant="secondary" size="sm" onClick={onCreate}>
             <Plus className="size-4" />
@@ -76,10 +80,7 @@ export function Header({ view, onView, onCreate, onSettings }: HeaderProps) {
           layoutId="tab-indicator-mobile"
           value={view}
           onChange={onView}
-          options={[
-            { label: "Markets", value: "markets", icon: LineChart },
-            { label: "Portfolio", value: "portfolio", icon: Briefcase },
-          ]}
+          options={TABS}
         />
       </div>
     </header>

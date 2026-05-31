@@ -12,6 +12,8 @@ import {
   type ToolbarState,
 } from "@/components/MarketToolbar";
 import { Portfolio } from "@/components/Portfolio";
+import { Overview } from "@/components/Overview";
+import { AskSeer } from "@/components/AskSeer";
 import { CreateMarketModal } from "@/components/CreateMarketModal";
 import { SettingsModal } from "@/components/SettingsModal";
 
@@ -30,13 +32,15 @@ interface Route {
 function parseHash(): Route {
   const h = window.location.hash;
   if (h.startsWith("#/m/")) return { view: "markets", selected: h.slice(4) };
+  if (h === "#/markets") return { view: "markets", selected: null };
   if (h === "#/portfolio") return { view: "portfolio", selected: null };
-  return { view: "markets", selected: null };
+  return { view: "overview", selected: null };
 }
 
 function routeToHash({ view, selected }: Route): string {
   if (selected) return `#/m/${selected}`;
   if (view === "portfolio") return "#/portfolio";
+  if (view === "markets") return "#/markets";
   return "#/";
 }
 
@@ -54,6 +58,7 @@ function AppShell() {
   });
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
 
   // Keep the URL hash in sync with the active route (shareable links).
   useEffect(() => {
@@ -88,6 +93,7 @@ function AppShell() {
         }}
         onCreate={() => setCreateOpen(true)}
         onSettings={() => setSettingsOpen(true)}
+        onAsk={() => setAskOpen(true)}
       />
 
       <main className="mx-auto max-w-6xl px-5 py-8">
@@ -102,6 +108,26 @@ function AppShell() {
                   void refresh();
                 }}
                 afterTrade={afterTrade}
+              />
+            </motion.div>
+          ) : view === "overview" ? (
+            <motion.div key="overview" {...fade}>
+              <div className="mb-6">
+                <h1 className="text-xl font-semibold tracking-tight text-ink">Overview</h1>
+                <p className="mt-1 text-sm text-muted">
+                  Your portfolio at a glance, markets closing soon, and anything awaiting a dispute.
+                </p>
+              </div>
+              <Overview
+                markets={markets}
+                loading={loading}
+                account={account}
+                onSelect={setSelected}
+                onView={(v) => {
+                  setSelected(null);
+                  setView(v);
+                }}
+                onAsk={() => setAskOpen(true)}
               />
             </motion.div>
           ) : view === "portfolio" ? (
@@ -159,6 +185,12 @@ function AppShell() {
         }}
       />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <AskSeer
+        open={askOpen}
+        onClose={() => setAskOpen(false)}
+        markets={markets}
+        account={account}
+      />
     </div>
   );
 }
