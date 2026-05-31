@@ -39,6 +39,7 @@ export function ClaimPanel({ detail, onClaimed }: { detail: MarketDetail; onClai
           market: detail.address,
           question: detail.question,
           detail: "Claim winnings",
+          hash: ok,
         });
         onClaimed();
       }

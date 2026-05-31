@@ -93,7 +93,11 @@ export function CreateMarketModal({ open, onClose, afterCreate }: CreateMarketMo
         ) as Promise<ContractTransactionResponse>,
       );
       if (ok) {
-        record(account, { type: "create", detail: `Created “${question.trim().slice(0, 48)}”` });
+        record(account, {
+          type: "create",
+          detail: `Created “${question.trim().slice(0, 48)}”`,
+          hash: ok,
+        });
         afterCreate();
         onClose();
         setQuestion("");

@@ -58,6 +58,7 @@ export function CommitRevealPanel({
           market,
           question,
           detail: `Reveal ${pending.isBuy ? "buy" : "sell"} ${fmt(shares)} ${sideLabel}`,
+          hash: ok,
         });
         onResolved();
       }

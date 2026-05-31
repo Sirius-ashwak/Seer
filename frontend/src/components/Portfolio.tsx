@@ -62,6 +62,7 @@ export function Portfolio({ account, onSelect, afterAction }: PortfolioProps) {
             market: p.address,
             question: p.question,
             detail: `Claimed ${fmt(p.claimAmount)} Points`,
+            hash: ok,
           });
         }
       }

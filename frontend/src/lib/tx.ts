@@ -6,11 +6,12 @@ import { explorerTx } from "@/lib/contracts";
 // Wrap a state-changing contract call in a single toast that tracks the
 // pending → confirmed → failed lifecycle. On networks with a block explorer
 // the success toast carries a "View" link to the mined transaction. Returns
-// true on success.
+// the transaction hash on success (truthy, so `if (ok)` still works) and null
+// on failure — callers thread the hash into the activity log for explorer links.
 export async function runTx(
   label: string,
   send: () => Promise<ContractTransactionResponse>,
-): Promise<boolean> {
+): Promise<string | null> {
   const id = toast.loading(`${label}…`);
   try {
     const tx = await send();
@@ -22,9 +23,9 @@ export async function runTx(
         ? { label: "View ↗", onClick: () => window.open(url, "_blank", "noopener,noreferrer") }
         : undefined,
     });
-    return true;
+    return tx.hash;
   } catch (err) {
     toast.error(prettyError(err), { id });
-    return false;
+    return null;
   }
 }

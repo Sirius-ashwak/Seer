@@ -154,6 +154,7 @@ export function TradePanel({ detail, onTraded, onCommitted, hasPendingCommit }: 
             market: detail.address,
             question: detail.question,
             detail: `${isBuy ? "Buy" : "Sell"} ${fmt(parsedShares)} ${sideLabel}`,
+            hash: ok,
           });
           setShares("");
           onTraded();

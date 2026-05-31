@@ -107,6 +107,7 @@ export function AgentSimulator({ detail, resolution, onAction }: AgentSimulatorP
           market: detail.address,
           question: detail.question,
           detail: `Simulated ${kind} verdict`,
+          hash: ok,
         });
         onAction();
       }

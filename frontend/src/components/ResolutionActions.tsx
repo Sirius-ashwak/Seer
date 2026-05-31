@@ -85,7 +85,13 @@ export function ResolutionActions({ detail, resolution, onAction }: ResolutionAc
     try {
       const ok = await runTx(label, send);
       if (ok) {
-        record(account, { type, market: detail.address, question: detail.question, detail: label });
+        record(account, {
+          type,
+          market: detail.address,
+          question: detail.question,
+          detail: label,
+          hash: ok,
+        });
         onAction();
       }
     } finally {

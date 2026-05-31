@@ -95,6 +95,7 @@ export function ProposeModal({
           market,
           question,
           detail: "Propose resolution",
+          hash: ok,
         });
         onProposed();
         onClose();
