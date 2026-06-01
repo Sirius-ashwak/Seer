@@ -21,11 +21,25 @@ interface WalletState {
   wrongChain: boolean;
   hasWallet: boolean;
   connect: () => Promise<void>;
+  disconnect: () => void;
   switchChain: () => Promise<void>;
   refreshBalance: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletState | null>(null);
+
+// Persisted "stay logged out" flag. Browser wallets can't always be revoked
+// from a dApp, so a manual disconnect sets this to suppress the silent
+// auto-reconnect until the user explicitly clicks Connect again.
+const DISCONNECT_KEY = "seer:wallet:disconnected";
+
+function isDisconnected(): boolean {
+  try {
+    return localStorage.getItem(DISCONNECT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 async function ensureChain(): Promise<void> {
   const eth = window.ethereum;
@@ -100,6 +114,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const connect = useCallback(async () => {
     if (!window.ethereum) return;
+    try {
+      localStorage.removeItem(DISCONNECT_KEY);
+    } catch {
+      /* ignore */
+    }
     setConnecting(true);
     try {
       await ensureChain();
@@ -110,6 +129,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setConnecting(false);
     }
   }, [hydrate]);
+
+  // Soft-disconnect: clear app state and remember the choice. Also fire a
+  // best-effort EIP-2255 revoke (MetaMask) — a real disconnect where supported,
+  // harmless where it isn't.
+  const disconnect = useCallback(() => {
+    try {
+      localStorage.setItem(DISCONNECT_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    void window.ethereum
+      ?.request?.({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] })
+      .catch(() => undefined);
+    setAccount(null);
+    setSigner(null);
+    setBalance(0n);
+    setChainId(null);
+    accountRef.current = null;
+  }, []);
 
   const switchChain = useCallback(async () => {
     await ensureChain();
@@ -128,7 +166,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setSigner(null);
         setBalance(0n);
         accountRef.current = null;
-      } else {
+      } else if (!isDisconnected()) {
         void hydrate();
       }
     };
@@ -137,13 +175,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     eth.on("accountsChanged", onAccounts);
     eth.on("chainChanged", onChain);
 
-    // Silent reconnect on load if the site is already permitted.
-    void eth
-      .request({ method: "eth_accounts" })
-      .then((accs) => {
-        if ((accs as string[])?.length) void hydrate();
-      })
-      .catch(() => undefined);
+    // Silent reconnect on load if the site is already permitted — unless the
+    // user explicitly disconnected.
+    if (!isDisconnected()) {
+      void eth
+        .request({ method: "eth_accounts" })
+        .then((accs) => {
+          if ((accs as string[])?.length) void hydrate();
+        })
+        .catch(() => undefined);
+    }
 
     return () => {
       eth.removeListener?.("accountsChanged", onAccounts);
@@ -161,10 +202,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       hasWallet,
       wrongChain: chainId !== null && chainId !== CONFIG.chainId,
       connect,
+      disconnect,
       switchChain,
       refreshBalance,
     }),
-    [account, signer, chainId, balance, connecting, hasWallet, connect, switchChain, refreshBalance],
+    [account, signer, chainId, balance, connecting, hasWallet, connect, disconnect, switchChain, refreshBalance],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
