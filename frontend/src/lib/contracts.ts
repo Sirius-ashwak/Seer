@@ -38,3 +38,7 @@ export function mockContract(runner: Runner = readProvider): Contract | null {
 export function explorerTx(hash: string): string | null {
   return CONFIG.blockExplorer ? `${CONFIG.blockExplorer}/tx/${hash}` : null;
 }
+
+export function explorerAddress(addr: string): string | null {
+  return CONFIG.blockExplorer ? `${CONFIG.blockExplorer}/address/${addr}` : null;
+}

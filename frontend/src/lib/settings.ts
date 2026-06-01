@@ -66,3 +66,19 @@ export function setDefaultSlippage(pct: number): void {
     /* ignore */
   }
 }
+
+// Clears persisted preferences — network, RPC, slippage, plus any other `seer:*`
+// settings such as the wallet disconnect flag and notification-seen markers. The
+// local activity log (`seer:activity:*`) is intentionally preserved.
+export function resetPreferences(): void {
+  try {
+    const remove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("seer:") && !k.startsWith("seer:activity:")) remove.push(k);
+    }
+    remove.forEach((k) => localStorage.removeItem(k));
+  } catch {
+    /* ignore */
+  }
+}
