@@ -41,7 +41,25 @@ function routeToHash({ view, selected }: Route): string {
   if (selected) return `#/m/${selected}`;
   if (view === "portfolio") return "#/portfolio";
   if (view === "markets") return "#/markets";
-  return "#/";
+  return "#/overview";
+}
+
+// `#/` (the bare root) is the marketing landing, which renders outside the app
+// shell; every other hash is an in-app route handled by AppShell.
+function useHashRoute(): string {
+  const [hash, setHash] = useState(() => window.location.hash);
+  useEffect(() => {
+    const onHash = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  return hash;
+}
+
+function Root() {
+  const hash = useHashRoute();
+  const isLanding = hash === "" || hash === "#" || hash === "#/";
+  return isLanding ? <Landing /> : <AppShell />;
 }
 
 function AppShell() {
@@ -198,7 +216,7 @@ function AppShell() {
 export default function App() {
   return (
     <WalletProvider>
-      <AppShell />
+      <Root />
       <Toaster
         theme="dark"
         position="top-right"
