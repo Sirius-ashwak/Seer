@@ -1,20 +1,12 @@
 import { useEffect, useState } from "react";
 import { Gavel, Hourglass, X } from "lucide-react";
-import { resolverContract, readProvider } from "@/lib/contracts";
-import { ResolverPhase, RESOLVER_OUTCOME_LABELS } from "@/abi";
-import { CONFIG, ZERO_ADDRESS } from "@/config";
+import { RESOLVER_OUTCOME_LABELS } from "@/abi";
+import { useChallengeable } from "@/hooks/useChallengeable";
 import type { MarketSummary } from "@/types";
 
 interface ChallengeCTAProps {
   markets: MarketSummary[];
   onSelect: (address: string) => void;
-}
-
-interface Challengeable {
-  address: string;
-  question: string;
-  proposedOutcome: number; // resolver Outcome enum (1 Invalid, 2 Yes, 3 No)
-  deadline: number; // unix seconds
 }
 
 function fmtCountdown(secs: number): string {
@@ -33,49 +25,14 @@ function fmtCountdown(secs: number): string {
 // urgency). "Review & dispute" deep-links to the market, where the existing
 // ResolutionActions flow lives.
 export function ChallengeCTA({ markets, onSelect }: ChallengeCTAProps) {
-  const [target, setTarget] = useState<Challengeable | null>(null);
+  const target = useChallengeable(markets)[0] ?? null;
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const [dismissed, setDismissed] = useState(false);
 
-  // Scan resolver state whenever the market set changes.
+  // Clear a stale dismissal when a different market becomes the soonest target.
   useEffect(() => {
-    const resolverAddr = CONFIG.contracts.resolver;
-    if (!resolverAddr || resolverAddr === ZERO_ADDRESS || markets.length === 0) {
-      setTarget(null);
-      return;
-    }
-    let live = true;
-    const nowSec = Math.floor(Date.now() / 1000);
-    const r = resolverContract(resolverAddr, readProvider);
-
-    void (async () => {
-      try {
-        const scanned = await Promise.all(
-          markets.map(async (m) => {
-            const phase = Number((await r.phaseOf(m.address)) as bigint);
-            if (phase !== ResolverPhase.Challenge) return null;
-            const [deadline, proposed] = await Promise.all([
-              r.challengeDeadlineOf(m.address) as Promise<bigint>,
-              r.proposedOutcomeOf(m.address) as Promise<bigint>,
-            ]);
-            const dl = Number(deadline);
-            if (dl <= nowSec) return null;
-            return { address: m.address, question: m.question, proposedOutcome: Number(proposed), deadline: dl };
-          }),
-        );
-        if (!live) return;
-        const open = scanned.filter((c): c is Challengeable => c !== null).sort((a, b) => a.deadline - b.deadline);
-        setTarget(open[0] ?? null);
-        setDismissed(false);
-      } catch {
-        if (live) setTarget(null);
-      }
-    })();
-
-    return () => {
-      live = false;
-    };
-  }, [markets]);
+    setDismissed(false);
+  }, [target?.address]);
 
   // 1s tick only while a live countdown is showing.
   useEffect(() => {
