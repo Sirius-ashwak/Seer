@@ -13,9 +13,11 @@ import {
 } from "@/components/MarketToolbar";
 import { Portfolio } from "@/components/Portfolio";
 import { Overview } from "@/components/Overview";
+import { Landing } from "@/components/Landing";
 import { AskSeer } from "@/components/AskSeer";
 import { CreateMarketModal } from "@/components/CreateMarketModal";
 import { SettingsModal } from "@/components/SettingsModal";
+import { CommandPalette } from "@/components/CommandPalette";
 
 const fade = {
   initial: { opacity: 0, y: 6 },
@@ -77,6 +79,19 @@ function AppShell() {
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // ⌘K / Ctrl+K toggles the command palette from anywhere in the app.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Keep the URL hash in sync with the active route (shareable links).
   useEffect(() => {
@@ -109,6 +124,8 @@ function AppShell() {
           setSelected(null);
           setView(v);
         }}
+        markets={markets}
+        onSelect={setSelected}
         onCreate={() => setCreateOpen(true)}
         onSettings={() => setSettingsOpen(true)}
         onAsk={() => setAskOpen(true)}
@@ -208,6 +225,19 @@ function AppShell() {
         onClose={() => setAskOpen(false)}
         markets={markets}
         account={account}
+      />
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        markets={markets}
+        onView={(v) => {
+          setSelected(null);
+          setView(v);
+        }}
+        onSelect={setSelected}
+        onCreate={() => setCreateOpen(true)}
+        onAsk={() => setAskOpen(true)}
+        onSettings={() => setSettingsOpen(true)}
       />
     </div>
   );
